@@ -112,37 +112,13 @@
                         videoRef.current.play();
                     }
 
-                    // Skús rôzne MIME types
-                    console.log('[MediaRecorder] Checking supported MIME types...');
-                    let mimeType;
-                    if (type === 'video') {
-                        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-                            mimeType = 'video/webm;codecs=vp9,opus';
-                        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-                            mimeType = 'video/webm;codecs=vp8,opus';
-                        } else if (MediaRecorder.isTypeSupported('video/webm')) {
-                            mimeType = 'video/webm';
-                        } else {
-                            mimeType = '';
-                        }
-                    } else {
-                        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-                            mimeType = 'audio/webm;codecs=opus';
-                        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-                            mimeType = 'audio/webm';
-                        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-                            mimeType = 'audio/mp4';
-                        } else {
-                            mimeType = '';
-                        }
-                    }
-                    console.log('[MediaRecorder] Selected MIME type:', mimeType || 'default');
+                    // Vytvorme MediaRecorder bez špecifikácie MIME typu - prehliadač vyberie najlepší
+                    console.log('[MediaRecorder] Creating MediaRecorder with default settings...');
+                    mediaRecorderRef.current = new window.MediaRecorder(stream);
                     
-                    mediaRecorderRef.current = mimeType 
-                        ? new window.MediaRecorder(stream, { mimeType })
-                        : new window.MediaRecorder(stream);
-                    
-                    console.log('[MediaRecorder] MediaRecorder created, state:', mediaRecorderRef.current.state);
+                    console.log('[MediaRecorder] MediaRecorder created!');
+                    console.log('[MediaRecorder] State:', mediaRecorderRef.current.state);
+                    console.log('[MediaRecorder] MIME type:', mediaRecorderRef.current.mimeType);
                     chunksRef.current = [];
 
                     mediaRecorderRef.current.ondataavailable = (e) => {
@@ -153,25 +129,32 @@
                     mediaRecorderRef.current.onstop = async () => {
                         console.log('[MediaRecorder] Recording stopped, processing...');
                         setProcessing(true);
-                        const finalMimeType = mediaRecorderRef.current.mimeType || (type === 'video' ? 'video/webm' : 'audio/webm');
+                        
+                        // Použijeme MIME type ktorý vybral prehliadač
+                        const finalMimeType = mediaRecorderRef.current.mimeType;
                         console.log('[MediaRecorder] Final MIME type:', finalMimeType);
                         console.log('[MediaRecorder] Total chunks:', chunksRef.current.length);
+                        
                         const blob = new Blob(chunksRef.current, { type: finalMimeType });
-                        console.log('[MediaRecorder] Blob size:', blob.size);
-                        const extension = finalMimeType.includes('mp4') ? 'mp4' : 'webm';
-                        const file = new File([blob], `${type}_${Date.now()}.${extension}`, { type: finalMimeType });
+                        console.log('[MediaRecorder] Blob size:', blob.size, 'bytes');
+                        
+                        // Zisti extension z MIME typu
+                        let extension = 'webm'; // default
+                        if (finalMimeType.includes('mp4')) extension = 'mp4';
+                        else if (finalMimeType.includes('ogg')) extension = 'ogg';
                         
                         const fileName = `${type}s/${type}_${Date.now()}.${extension}`;
                         console.log('[MediaRecorder] Uploading to:', fileName);
-                        const { error } = await supabaseClient.storage.from('media').upload(fileName, file);
+                        
+                        const { error } = await supabaseClient.storage.from('media').upload(fileName, blob);
                         
                         if (!error) {
                             const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(fileName);
-                            console.log('[MediaRecorder] Upload success, URL:', publicUrl);
+                            console.log('[MediaRecorder] Upload success! URL:', publicUrl);
                             onComplete(publicUrl);
                         } else {
                             console.error('[MediaRecorder] Upload error:', error);
-                            alert('Chyba pri nahrávaní súboru.');
+                            alert('Chyba pri nahrávaní súboru: ' + error.message);
                         }
                         setProcessing(false);
                     };
