@@ -443,29 +443,57 @@
                 setError('');
 
                 try {
-                    // Registrácia užívateľa
+                    // 1. Registrácia užívateľa
                     const { data: authData, error: authError } = await supabaseClient.auth.signUp({
                         email,
                         password,
                         options: {
-                            data: { name }
+                            emailRedirectTo: window.location.origin
                         }
                     });
 
                     if (authError) throw authError;
+                    if (!authData.user) throw new Error('Registrácia zlyhala');
 
-                    // Označ token ako použitý
+                    // 2. Vytvor profil v profiles tabuľke so zadaným menom
+                    const { error: profileError } = await supabaseClient.from('profiles').upsert({
+                        id: authData.user.id,
+                        email: email,
+                        name: name, // Meno z input fieldu!
+                        role: 'Developer',
+                        color: '#3b82f6'
+                    });
+
+                    if (profileError) {
+                        console.error('Profile creation error:', profileError);
+                    }
+
+                    // 3. Označ token ako použitý
                     await supabaseClient.rpc('mark_token_used', {
                         use_token: token,
                         user_id: authData.user.id
                     });
 
-                    // Presmerovanie na login
-                    window.location.href = '/';
+                    // 4. Automaticky prihlás užívateľa
+                    const { error: loginError } = await supabaseClient.auth.signInWithPassword({
+                        email,
+                        password
+                    });
+
+                    if (loginError) {
+                        // Ak auto-login zlyhá, presmeruj na login stránku
+                        alert('Účet vytvorený úspešne! Teraz sa prihláste s vaším emailom a heslom.');
+                        window.location.href = '/';
+                    } else {
+                        // Úspešne prihlásený - počkaj aby sa session stihla nastaviť
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        window.location.href = '/';
+                    }
                 } catch (err) {
+                    console.error('Registration error:', err);
                     setError(err.message);
+                    setRegistering(false);
                 }
-                setRegistering(false);
             };
 
             if (loading) {
