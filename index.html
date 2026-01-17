@@ -408,9 +408,160 @@
             );
         }
 
+        // INVITE REGISTER SCREEN
+        function InviteRegisterScreen({ token }) {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [name, setName] = useState('');
+            const [loading, setLoading] = useState(true);
+            const [registering, setRegistering] = useState(false);
+            const [error, setError] = useState('');
+            const [tokenValid, setTokenValid] = useState(false);
+
+            useEffect(() => {
+                validateToken();
+            }, [token]);
+
+            const validateToken = async () => {
+                const { data, error } = await supabaseClient.rpc('validate_invite_token', {
+                    check_token: token
+                });
+
+                if (error || !data || data.length === 0 || !data[0].valid) {
+                    setError('Neplatná alebo použitá pozvánka.');
+                    setLoading(false);
+                    return;
+                }
+
+                setEmail(data[0].email);
+                setTokenValid(true);
+                setLoading(false);
+            };
+
+            const handleRegister = async (e) => {
+                e.preventDefault();
+                setRegistering(true);
+                setError('');
+
+                try {
+                    // Registrácia užívateľa
+                    const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+                        email,
+                        password,
+                        options: {
+                            data: { name }
+                        }
+                    });
+
+                    if (authError) throw authError;
+
+                    // Označ token ako použitý
+                    await supabaseClient.rpc('mark_token_used', {
+                        use_token: token,
+                        user_id: authData.user.id
+                    });
+
+                    // Presmerovanie na login
+                    window.location.href = '/';
+                } catch (err) {
+                    setError(err.message);
+                }
+                setRegistering(false);
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center" style={{ background: '#f5f5f5' }}>
+                        <Icon name="Loader2" className="w-8 h-8 animate-spin text-gray-400" />
+                    </div>
+                );
+            }
+
+            if (!tokenValid) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center" style={{ background: '#f5f5f5' }}>
+                        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md m-4 text-center">
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Icon name="XCircle" className="w-8 h-8 text-red-600" />
+                            </div>
+                            <h2 className="text-xl font-bold mb-2">Neplatná pozvánka</h2>
+                            <p className="text-gray-600 mb-6">{error}</p>
+                            <a href="/" className="inline-block px-6 py-2 rounded-lg text-white" style={{ background: '#e43826' }}>
+                                Späť na prihlásenie
+                            </a>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen flex items-center justify-center" style={{ background: '#f5f5f5' }}>
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md m-4">
+                        <div className="flex flex-col items-center mb-8">
+                            <img src="https://www.profielektromeister.sk/wp-content/uploads/2025/09/Logo-01-scaled-1-2048x2048.png" className="w-20 h-20 object-contain mb-4" />
+                            <h1 className="text-2xl font-bold">Vitajte v PEMApp!</h1>
+                            <p className="text-gray-500 text-sm text-center mt-2">Dokončite registráciu a vytvorte si heslo</p>
+                        </div>
+
+                        <form onSubmit={handleRegister} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Meno a priezvisko</label>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={e => setName(e.target.value)}
+                                    placeholder="Ján Novák"
+                                    className="w-full px-4 py-3 border-2 rounded-xl focus:border-red-500 outline-none"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Email</label>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    disabled
+                                    className="w-full px-4 py-3 border-2 rounded-xl bg-gray-100 text-gray-600"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Heslo</label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    className="w-full px-4 py-3 border-2 rounded-xl focus:border-red-500 outline-none"
+                                    required
+                                    minLength={6}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Minimálne 6 znakov</p>
+                            </div>
+                            {error && <p className="text-red-500 text-sm">{error}</p>}
+                            <button
+                                type="submit"
+                                disabled={registering}
+                                className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                                style={{ background: '#369d52' }}
+                            >
+                                {registering && <Icon name="Loader2" className="w-5 h-5 animate-spin" />}
+                                {registering ? 'Vytváram účet...' : 'Vytvoriť účet'}
+                            </button>
+                        </form>
+
+                        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                            <p className="text-sm text-blue-800">
+                                <Icon name="Info" className="w-4 h-4 inline mr-1" />
+                                Po vytvorení účtu budete presmerovaný na prihlasovaciu stránku.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // AUTH SCREEN
         function AuthScreen() {
-            const [mode, setMode] = useState('login'); // 'login' alebo 'register'
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [loading, setLoading] = useState(false);
@@ -425,49 +576,16 @@
                 setLoading(false);
             };
 
-            const handleRegister = async (e) => {
-                e.preventDefault();
-                setLoading(true);
-                setError('');
-                const { error } = await supabaseClient.auth.signUp({ 
-                    email, 
-                    password,
-                    options: { emailRedirectTo: window.location.origin }
-                });
-                if (error) {
-                    setError(error.message);
-                } else {
-                    setError('');
-                    alert('Registrácia úspešná! Skontrolujte email pre potvrdenie.');
-                }
-                setLoading(false);
-            };
-
             return (
                 <div className="min-h-screen flex items-center justify-center" style={{ background: '#f5f5f5' }}>
                     <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md m-4">
                         <div className="flex flex-col items-center mb-8">
                             <img src="https://www.profielektromeister.sk/wp-content/uploads/2025/09/Logo-01-scaled-1-2048x2048.png" className="w-20 h-20 object-contain mb-4" />
                             <h1 className="text-2xl font-bold">PEMApp Tasks</h1>
-                            <p className="text-gray-500 text-sm">Správa úloh pre tím</p>
+                            <p className="text-gray-500 text-sm">Prihlásenie do systému</p>
                         </div>
 
-                        <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-lg">
-                            <button 
-                                onClick={() => setMode('login')} 
-                                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${mode === 'login' ? 'bg-white shadow' : 'text-gray-600'}`}
-                            >
-                                Prihlásenie
-                            </button>
-                            <button 
-                                onClick={() => setMode('register')} 
-                                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${mode === 'register' ? 'bg-white shadow' : 'text-gray-600'}`}
-                            >
-                                Registrácia
-                            </button>
-                        </div>
-
-                        <form onSubmit={mode === 'login' ? handleLogin : handleRegister} className="space-y-4">
+                        <form onSubmit={handleLogin} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium mb-1 text-gray-700">Email</label>
                                 <input 
@@ -499,9 +617,13 @@
                                 style={{ background: '#e43826' }}
                             >
                                 {loading && <Icon name="Loader2" className="w-5 h-5 animate-spin" />}
-                                {loading ? 'Prebieha...' : (mode === 'login' ? 'Prihlásiť sa' : 'Registrovať sa')}
+                                {loading ? 'Prihlasovanie...' : 'Prihlásiť sa'}
                             </button>
                         </form>
+
+                        <p className="text-center text-sm text-gray-500 mt-6">
+                            Nemáte účet? Kontaktujte administrátora pre pozvánku.
+                        </p>
                     </div>
                 </div>
             );
@@ -512,6 +634,16 @@
             const [session, setSession] = useState(null);
             const [currentUser, setCurrentUser] = useState(null);
             const [loading, setLoading] = useState(true);
+            
+            // Skontroluj či je invite token v URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const inviteToken = urlParams.get('token');
+
+            // Ak je invite token, zobraz registračnú stránku
+            if (inviteToken && !session) {
+                return <InviteRegisterScreen token={inviteToken} />;
+            }
+
             const [showProfileSetup, setShowProfileSetup] = useState(false);
             const [isFirstTime, setIsFirstTime] = useState(false);
             const [meetings, setMeetings] = useState([]);
@@ -525,6 +657,7 @@
             const [showNewTask, setShowNewTask] = useState(false);
             const [showNewMeeting, setShowNewMeeting] = useState(false);
             const [showTeam, setShowTeam] = useState(false);
+            const [showAdminPanel, setShowAdminPanel] = useState(false);
             const [confirmDialog, setConfirmDialog] = useState({ isOpen: false });
 
             // Track if any modal is open
@@ -670,6 +803,12 @@
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    {currentUser?.role === 'Admin' && (
+                                        <button onClick={() => setShowAdminPanel(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50" title="Admin Panel">
+                                            <Icon name="Shield" className="w-5 h-5 text-red-600" />
+                                            <span className="hidden sm:inline text-sm font-medium">Admin</span>
+                                        </button>
+                                    )}
                                     <button onClick={() => setShowTeam(true)} className="p-2 rounded-lg border hover:bg-gray-50">
                                         <Icon name="Users" className="w-5 h-5" />
                                     </button>
@@ -896,6 +1035,7 @@
                         {showNewTask && <NewTaskModal meetings={meetings} selectedMeeting={selectedMeeting} onClose={() => setShowNewTask(false)} onSave={createTask} />}
                         {showNewMeeting && <NewMeetingModal onClose={() => setShowNewMeeting(false)} onSave={createMeeting} />}
                         {showTeam && <TeamModal onClose={() => setShowTeam(false)} />}
+                        {showAdminPanel && <AdminPanelModal onClose={() => setShowAdminPanel(false)} />}
                         <ConfirmDialog {...confirmDialog} />
                     </div>
                 </AppContext.Provider>
@@ -1482,6 +1622,167 @@
                                         {m.id === currentUser?.id && <span className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded-full">Ty</span>}
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ADMIN PANEL MODAL
+        function AdminPanelModal({ onClose }) {
+            const { currentUser, supabaseClient } = useApp();
+            const [email, setEmail] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [success, setSuccess] = useState('');
+            const [error, setError] = useState('');
+            const [invites, setInvites] = useState([]);
+
+            useEffect(() => {
+                loadInvites();
+            }, []);
+
+            const loadInvites = async () => {
+                const { data } = await supabaseClient
+                    .from('invite_tokens')
+                    .select('*, profiles!invite_tokens_created_by_fkey(name, email)')
+                    .order('created_at', { ascending: false });
+                setInvites(data || []);
+            };
+
+            const generateInvite = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError('');
+                setSuccess('');
+
+                try {
+                    // 1. Vygeneruj token
+                    const { data: tokenData, error: tokenError } = await supabaseClient.rpc('generate_invite_token', {
+                        user_email: email
+                    });
+
+                    if (tokenError) throw tokenError;
+
+                    // 2. Zavolaj Edge Function na poslanie emailu
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    
+                    const response = await fetch(`${supabaseClient.supabaseUrl}/functions/v1/send-invite-email`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`
+                        },
+                        body: JSON.stringify({
+                            email: email,
+                            token: tokenData
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Chyba pri posielaní emailu');
+                    }
+
+                    setSuccess(`✅ Pozvánka odoslaná na ${email}!`);
+                    setEmail('');
+                    loadInvites();
+                } catch (err) {
+                    setError(err.message || 'Chyba pri vytváraní pozvánky');
+                }
+                setLoading(false);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center p-6 border-b" style={{ background: '#f5f5f5' }}>
+                            <div>
+                                <h2 className="text-xl font-bold">Admin Panel</h2>
+                                <p className="text-sm text-gray-500">Správa pozvánok</p>
+                            </div>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg"><Icon name="X" className="w-5 h-5" /></button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)]">
+                            {/* Nová pozvánka */}
+                            <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl p-6 mb-6 border-2 border-red-100">
+                                <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+                                    <Icon name="UserPlus" className="w-5 h-5" />
+                                    Pozvať nového užívateľa
+                                </h3>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Zadajte email, vygeneruje sa pozvánkový link ktorý mu pošlete emailom.
+                                </p>
+                                <form onSubmit={generateInvite} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2">Email adresa</label>
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={e => setEmail(e.target.value)}
+                                            placeholder="novy.clen@email.sk"
+                                            className="w-full px-4 py-2 border-2 rounded-lg focus:border-red-500 outline-none"
+                                            required
+                                        />
+                                    </div>
+                                    {error && (
+                                        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                            <Icon name="AlertCircle" className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                                            <p className="text-red-600 text-sm">{error}</p>
+                                        </div>
+                                    )}
+                                    {success && (
+                                        <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                            <Icon name="CheckCircle" className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                                            <p className="text-green-600 text-sm">{success}</p>
+                                        </div>
+                                    )}
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="w-full py-3 rounded-lg text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                                        style={{ background: '#e43826' }}
+                                    >
+                                        {loading && <Icon name="Loader2" className="w-5 h-5 animate-spin" />}
+                                        {loading ? 'Generujem...' : 'Vygenerovať link'}
+                                    </button>
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                        <p className="text-sm text-blue-800 flex items-start gap-2">
+                                            <Icon name="Info" className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                            <span>Link sa automaticky skopíruje do schránky. Pošlite ho na zadaný email.</span>
+                                        </p>
+                                    </div>
+                                </form>
+                            </div>
+
+                            {/* Zoznam pozvánok */}
+                            <div>
+                                <h3 className="text-lg font-bold mb-4">História pozvánok</h3>
+                                <div className="space-y-3">
+                                    {invites.length === 0 ? (
+                                        <p className="text-center text-gray-500 py-8">Žiadne pozvánky</p>
+                                    ) : invites.map(inv => (
+                                        <div key={inv.id} className="bg-gray-50 rounded-lg p-4 flex items-center justify-between">
+                                            <div>
+                                                <p className="font-medium">{inv.email}</p>
+                                                <p className="text-sm text-gray-500">
+                                                    {inv.used_at ? (
+                                                        <span className="text-green-600">✓ Použité {new Date(inv.used_at).toLocaleDateString('sk')}</span>
+                                                    ) : (
+                                                        <span className="text-orange-600">⏳ Čaká na použitie</span>
+                                                    )}
+                                                </p>
+                                                <p className="text-xs text-gray-400">Vytvorené {new Date(inv.created_at).toLocaleDateString('sk')}</p>
+                                            </div>
+                                            {!inv.used_at && (
+                                                <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-medium">
+                                                    Aktívne
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
