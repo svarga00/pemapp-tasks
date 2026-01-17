@@ -80,32 +80,40 @@
             const videoRef = useRef(null);
 
             useEffect(() => {
+                console.log('[MediaRecorder] Component mounted, type:', type);
                 return () => {
+                    console.log('[MediaRecorder] Component unmounting');
                     stopRecording(true);
                 };
             }, []);
 
             const startRecording = async () => {
+                console.log('[MediaRecorder] startRecording called, type:', type);
                 try {
                     // Skontroluj či je getUserMedia podporované
                     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        console.error('[MediaRecorder] getUserMedia not supported');
                         alert('Váš prehliadač nepodporuje nahrávanie. Použite Chrome, Firefox alebo Edge.');
                         return;
                     }
 
+                    console.log('[MediaRecorder] Requesting media permissions...');
                     const constraints = type === 'video' 
                         ? { video: { width: 1280, height: 720 }, audio: true }
                         : { audio: true };
                     
                     const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    console.log('[MediaRecorder] Got media stream:', stream);
                     streamRef.current = stream;
                     
                     if (type === 'video' && videoRef.current) {
+                        console.log('[MediaRecorder] Setting video preview');
                         videoRef.current.srcObject = stream;
                         videoRef.current.play();
                     }
 
                     // Skús rôzne MIME types
+                    console.log('[MediaRecorder] Checking supported MIME types...');
                     let mimeType;
                     if (type === 'video') {
                         if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
@@ -128,44 +136,54 @@
                             mimeType = '';
                         }
                     }
+                    console.log('[MediaRecorder] Selected MIME type:', mimeType || 'default');
                     
                     mediaRecorderRef.current = mimeType 
                         ? new window.MediaRecorder(stream, { mimeType })
                         : new window.MediaRecorder(stream);
                     
+                    console.log('[MediaRecorder] MediaRecorder created, state:', mediaRecorderRef.current.state);
                     chunksRef.current = [];
 
                     mediaRecorderRef.current.ondataavailable = (e) => {
+                        console.log('[MediaRecorder] Data available, size:', e.data.size);
                         if (e.data.size > 0) chunksRef.current.push(e.data);
                     };
 
                     mediaRecorderRef.current.onstop = async () => {
+                        console.log('[MediaRecorder] Recording stopped, processing...');
                         setProcessing(true);
                         const finalMimeType = mediaRecorderRef.current.mimeType || (type === 'video' ? 'video/webm' : 'audio/webm');
+                        console.log('[MediaRecorder] Final MIME type:', finalMimeType);
+                        console.log('[MediaRecorder] Total chunks:', chunksRef.current.length);
                         const blob = new Blob(chunksRef.current, { type: finalMimeType });
+                        console.log('[MediaRecorder] Blob size:', blob.size);
                         const extension = finalMimeType.includes('mp4') ? 'mp4' : 'webm';
                         const file = new File([blob], `${type}_${Date.now()}.${extension}`, { type: finalMimeType });
                         
                         const fileName = `${type}s/${type}_${Date.now()}.${extension}`;
+                        console.log('[MediaRecorder] Uploading to:', fileName);
                         const { error } = await supabaseClient.storage.from('media').upload(fileName, file);
                         
                         if (!error) {
                             const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(fileName);
+                            console.log('[MediaRecorder] Upload success, URL:', publicUrl);
                             onComplete(publicUrl);
                         } else {
-                            console.error('Upload error:', error);
+                            console.error('[MediaRecorder] Upload error:', error);
                             alert('Chyba pri nahrávaní súboru.');
                         }
                         setProcessing(false);
                     };
 
                     mediaRecorderRef.current.onerror = (e) => {
-                        console.error('MediaRecorder error:', e);
+                        console.error('[MediaRecorder] MediaRecorder error:', e);
                         alert('Chyba pri nahrávaní.');
                         stopRecording(true);
                     };
 
                     mediaRecorderRef.current.start(1000); // Zbieraj data každú sekundu
+                    console.log('[MediaRecorder] Recording started!');
                     setRecording(true);
                     setDuration(0);
                     
@@ -173,7 +191,7 @@
                         setDuration(d => d + 1);
                     }, 1000);
                 } catch (err) {
-                    console.error('Recording error:', err);
+                    console.error('[MediaRecorder] Error:', err);
                     let errorMsg = 'Chyba pri nahrávaní. ';
                     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
                         errorMsg += 'Povoľte prístup k ' + (type === 'video' ? 'kamere a ' : '') + 'mikrofónu.';
@@ -184,6 +202,7 @@
                     } else {
                         errorMsg += err.message || 'Neznáma chyba.';
                     }
+                    console.error('[MediaRecorder] Error message:', errorMsg);
                     alert(errorMsg);
                 }
             };
@@ -229,7 +248,10 @@
                 return (
                     <div className="flex gap-2">
                         <button
-                            onClick={startRecording}
+                            onClick={() => {
+                                console.log('[MediaRecorder] Start button clicked, type:', type);
+                                startRecording();
+                            }}
                             className="flex items-center gap-2 px-4 py-2 rounded-lg text-white"
                             style={{ background: '#e43826' }}
                         >
@@ -689,46 +711,86 @@
                                             <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Typ</th>
                                             <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Úloha</th>
                                             <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Stav</th>
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Odhad</th>
                                             <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Deadline</th>
-                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Riešiteľ</th>
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Aktivita</th>
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Kto rieši</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y">
                                         {filteredTasks.length === 0 ? (
-                                            <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-500">Žiadne úlohy</td></tr>
-                                        ) : filteredTasks.map(task => (
-                                            <tr key={task.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedTask(task)}>
-                                                <td className="px-4 py-3">
-                                                    <span className="w-7 h-7 rounded-full text-xs font-bold text-white flex items-center justify-center" style={{ background: task.priority <= 3 ? '#e43826' : task.priority <= 6 ? '#f59e0b' : '#369d52' }}>
-                                                        {task.priority}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium" style={{ background: `${typeConfig[task.type]?.color}20`, color: typeConfig[task.type]?.color }}>
-                                                        <Icon name={typeConfig[task.type]?.icon} className="w-3 h-3" />
-                                                        {typeConfig[task.type]?.label}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <p className="font-medium">{task.title}</p>
-                                                    <p className="text-sm text-gray-500 truncate max-w-xs">{task.description}</p>
-                                                </td>
-                                                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                                                    <select value={task.status} onChange={e => updateTask(task.id, { status: e.target.value }, 'status_change', `Stav zmenený na ${statusConfig[e.target.value].label}`)} className="text-sm rounded-full px-3 py-1 border-0" style={{ background: statusConfig[task.status].bg, color: statusConfig[task.status].color }}>
-                                                        {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm text-gray-600">
-                                                    {task.deadline ? new Date(task.deadline).toLocaleDateString('sk') : '-'}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="flex -space-x-2">
-                                                        {(task.assignees || []).slice(0, 3).map((a, i) => <UserAvatar key={i} user={a} size="sm" />)}
-                                                        {(task.assignees?.length || 0) > 3 && <span className="text-xs text-gray-500 ml-2">+{task.assignees.length - 3}</span>}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                            <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-500">Žiadne úlohy</td></tr>
+                                        ) : filteredTasks.map(task => {
+                                            const isOverdue = task.deadline && new Date(task.deadline) < new Date();
+                                            return (
+                                                <tr 
+                                                    key={task.id} 
+                                                    className="hover:opacity-80 cursor-pointer transition-opacity" 
+                                                    style={{ background: statusConfig[task.status].bg }}
+                                                    onClick={() => setSelectedTask(task)}
+                                                >
+                                                    <td className="px-4 py-3">
+                                                        <span className="w-7 h-7 rounded-full text-xs font-bold text-white flex items-center justify-center" style={{ background: task.priority <= 3 ? '#e43826' : task.priority <= 6 ? '#f59e0b' : '#369d52' }}>
+                                                            {task.priority}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium" style={{ background: `${typeConfig[task.type]?.color}20`, color: typeConfig[task.type]?.color }}>
+                                                            <Icon name={typeConfig[task.type]?.icon} className="w-3 h-3" />
+                                                            {typeConfig[task.type]?.label}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <p className="font-medium">{task.title}</p>
+                                                        <p className="text-sm text-gray-500 truncate max-w-xs">{task.description}</p>
+                                                    </td>
+                                                    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                                                        <select value={task.status} onChange={e => updateTask(task.id, { status: e.target.value }, 'status_change', `Stav zmenený na ${statusConfig[e.target.value].label}`)} className="text-sm rounded-full px-3 py-1 border-0 font-medium" style={{ background: statusConfig[task.status].bg, color: statusConfig[task.status].color }}>
+                                                            {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <span className="text-sm font-medium text-gray-700">{task.estimate || 0}h</span>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {task.deadline ? (
+                                                            <div className={`flex items-center gap-1 text-sm font-medium ${isOverdue ? 'text-red-600' : 'text-gray-600'}`}>
+                                                                {isOverdue && <Icon name="AlertCircle" className="w-4 h-4" />}
+                                                                {new Date(task.deadline).toLocaleDateString('sk')}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-sm text-gray-400">-</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                                                            <div className="flex items-center gap-1" title="Komentáre">
+                                                                <Icon name="MessageCircle" className="w-3.5 h-3.5" />
+                                                                <span>{task.comments_count || 0}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1" title="Audio">
+                                                                <Icon name="Mic" className="w-3.5 h-3.5" />
+                                                                <span>{task.audio_count || 0}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1" title="Video">
+                                                                <Icon name="Video" className="w-3.5 h-3.5" />
+                                                                <span>{task.video_count || 0}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1" title="Screenshoty">
+                                                                <Icon name="Image" className="w-3.5 h-3.5" />
+                                                                <span>{task.screenshots_count || 0}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex -space-x-2">
+                                                            {(task.assignees || []).slice(0, 3).map((a, i) => <UserAvatar key={i} user={a} size="sm" />)}
+                                                            {(task.assignees?.length || 0) > 3 && <span className="text-xs text-gray-500 ml-2">+{task.assignees.length - 3}</span>}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
