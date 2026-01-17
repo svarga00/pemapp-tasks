@@ -68,8 +68,8 @@
 
         const colorOptions = ['#e43826', '#369d52', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6'];
 
-        // MEDIA RECORDER COMPONENT
-        function MediaRecorder({ type = 'audio', onComplete, onCancel }) {
+        // AUDIO/VIDEO RECORDER COMPONENT
+        function AudioVideoRecorder({ type = 'audio', onComplete, onCancel }) {
             const [recording, setRecording] = useState(false);
             const [duration, setDuration] = useState(0);
             const [processing, setProcessing] = useState(false);
@@ -80,63 +80,63 @@
             const videoRef = useRef(null);
 
             useEffect(() => {
-                console.log('[MediaRecorder] Component mounted, type:', type);
+                console.log('[AudioVideoRecorder] Component mounted, type:', type);
                 return () => {
-                    console.log('[MediaRecorder] Component unmounting');
+                    console.log('[AudioVideoRecorder] Component unmounting');
                     stopRecording(true);
                 };
             }, []);
 
             const startRecording = async () => {
-                console.log('[MediaRecorder] startRecording called, type:', type);
+                console.log('[AudioVideoRecorder] startRecording called, type:', type);
                 try {
                     // Skontroluj či je getUserMedia podporované
                     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                        console.error('[MediaRecorder] getUserMedia not supported');
+                        console.error('[AudioVideoRecorder] getUserMedia not supported');
                         alert('Váš prehliadač nepodporuje nahrávanie. Použite Chrome, Firefox alebo Edge.');
                         return;
                     }
 
-                    console.log('[MediaRecorder] Requesting media permissions...');
+                    console.log('[AudioVideoRecorder] Requesting media permissions...');
                     const constraints = type === 'video' 
                         ? { video: { width: 1280, height: 720 }, audio: true }
                         : { audio: true };
                     
                     const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                    console.log('[MediaRecorder] Got media stream:', stream);
+                    console.log('[AudioVideoRecorder] Got media stream:', stream);
                     streamRef.current = stream;
                     
                     if (type === 'video' && videoRef.current) {
-                        console.log('[MediaRecorder] Setting video preview');
+                        console.log('[AudioVideoRecorder] Setting video preview');
                         videoRef.current.srcObject = stream;
                         videoRef.current.play();
                     }
 
                     // Vytvorme MediaRecorder bez špecifikácie MIME typu - prehliadač vyberie najlepší
-                    console.log('[MediaRecorder] Creating MediaRecorder with default settings...');
+                    console.log('[AudioVideoRecorder] Creating MediaRecorder with default settings...');
                     mediaRecorderRef.current = new window.MediaRecorder(stream);
                     
-                    console.log('[MediaRecorder] MediaRecorder created!');
-                    console.log('[MediaRecorder] State:', mediaRecorderRef.current.state);
-                    console.log('[MediaRecorder] MIME type:', mediaRecorderRef.current.mimeType);
+                    console.log('[AudioVideoRecorder] MediaRecorder created!');
+                    console.log('[AudioVideoRecorder] State:', mediaRecorderRef.current.state);
+                    console.log('[AudioVideoRecorder] MIME type:', mediaRecorderRef.current.mimeType);
                     chunksRef.current = [];
 
                     mediaRecorderRef.current.ondataavailable = (e) => {
-                        console.log('[MediaRecorder] Data available, size:', e.data.size);
+                        console.log('[AudioVideoRecorder] Data available, size:', e.data.size);
                         if (e.data.size > 0) chunksRef.current.push(e.data);
                     };
 
                     mediaRecorderRef.current.onstop = async () => {
-                        console.log('[MediaRecorder] Recording stopped, processing...');
+                        console.log('[AudioVideoRecorder] Recording stopped, processing...');
                         setProcessing(true);
                         
                         // Použijeme MIME type ktorý vybral prehliadač
                         const finalMimeType = mediaRecorderRef.current.mimeType;
-                        console.log('[MediaRecorder] Final MIME type:', finalMimeType);
-                        console.log('[MediaRecorder] Total chunks:', chunksRef.current.length);
+                        console.log('[AudioVideoRecorder] Final MIME type:', finalMimeType);
+                        console.log('[AudioVideoRecorder] Total chunks:', chunksRef.current.length);
                         
                         const blob = new Blob(chunksRef.current, { type: finalMimeType });
-                        console.log('[MediaRecorder] Blob size:', blob.size, 'bytes');
+                        console.log('[AudioVideoRecorder] Blob size:', blob.size, 'bytes');
                         
                         // Zisti extension z MIME typu
                         let extension = 'webm'; // default
@@ -144,29 +144,29 @@
                         else if (finalMimeType.includes('ogg')) extension = 'ogg';
                         
                         const fileName = `${type}s/${type}_${Date.now()}.${extension}`;
-                        console.log('[MediaRecorder] Uploading to:', fileName);
+                        console.log('[AudioVideoRecorder] Uploading to:', fileName);
                         
                         const { error } = await supabaseClient.storage.from('media').upload(fileName, blob);
                         
                         if (!error) {
                             const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(fileName);
-                            console.log('[MediaRecorder] Upload success! URL:', publicUrl);
+                            console.log('[AudioVideoRecorder] Upload success! URL:', publicUrl);
                             onComplete(publicUrl);
                         } else {
-                            console.error('[MediaRecorder] Upload error:', error);
+                            console.error('[AudioVideoRecorder] Upload error:', error);
                             alert('Chyba pri nahrávaní súboru: ' + error.message);
                         }
                         setProcessing(false);
                     };
 
                     mediaRecorderRef.current.onerror = (e) => {
-                        console.error('[MediaRecorder] MediaRecorder error:', e);
+                        console.error('[AudioVideoRecorder] MediaRecorder error:', e);
                         alert('Chyba pri nahrávaní.');
                         stopRecording(true);
                     };
 
                     mediaRecorderRef.current.start(1000); // Zbieraj data každú sekundu
-                    console.log('[MediaRecorder] Recording started!');
+                    console.log('[AudioVideoRecorder] Recording started!');
                     setRecording(true);
                     setDuration(0);
                     
@@ -174,7 +174,7 @@
                         setDuration(d => d + 1);
                     }, 1000);
                 } catch (err) {
-                    console.error('[MediaRecorder] Error:', err);
+                    console.error('[AudioVideoRecorder] Error:', err);
                     let errorMsg = 'Chyba pri nahrávaní. ';
                     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
                         errorMsg += 'Povoľte prístup k ' + (type === 'video' ? 'kamere a ' : '') + 'mikrofónu.';
@@ -185,7 +185,7 @@
                     } else {
                         errorMsg += err.message || 'Neznáma chyba.';
                     }
-                    console.error('[MediaRecorder] Error message:', errorMsg);
+                    console.error('[AudioVideoRecorder] Error message:', errorMsg);
                     alert(errorMsg);
                 }
             };
@@ -232,7 +232,7 @@
                     <div className="flex gap-2">
                         <button
                             onClick={() => {
-                                console.log('[MediaRecorder] Start button clicked, type:', type);
+                                console.log('[AudioVideoRecorder] Start button clicked, type:', type);
                                 startRecording();
                             }}
                             className="flex items-center gap-2 px-4 py-2 rounded-lg text-white"
@@ -1074,7 +1074,7 @@
                                     
                                     {recordingAudio && (
                                         <div className="mb-4">
-                                            <MediaRecorder 
+                                            <AudioVideoRecorder 
                                                 type="audio" 
                                                 onComplete={(url) => { addComment('audio', url); setRecordingAudio(false); }}
                                                 onCancel={() => setRecordingAudio(false)}
@@ -1084,7 +1084,7 @@
 
                                     {recordingVideo && (
                                         <div className="mb-4">
-                                            <MediaRecorder 
+                                            <AudioVideoRecorder 
                                                 type="video" 
                                                 onComplete={(url) => { addComment('video', url); setRecordingVideo(false); }}
                                                 onCancel={() => setRecordingVideo(false)}
@@ -1234,7 +1234,7 @@
                                             <button onClick={() => setForm({ ...form, audio_url: null })} className="text-sm text-red-600">Zmazať</button>
                                         </div>
                                     ) : recordingAudio ? (
-                                        <MediaRecorder 
+                                        <AudioVideoRecorder 
                                             type="audio" 
                                             onComplete={(url) => { setForm({ ...form, audio_url: url }); setRecordingAudio(false); }}
                                             onCancel={() => setRecordingAudio(false)}
