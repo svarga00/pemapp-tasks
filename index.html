@@ -1671,7 +1671,7 @@
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${session.access_token}`
+                            'Authorization': `Bearer ${session.access_token}`,
                         },
                         body: JSON.stringify({
                             email: email,
@@ -1679,15 +1679,17 @@
                         })
                     });
 
+                    const result = await response.json();
+
                     if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Chyba pri posielaní emailu');
+                        throw new Error(result.error || 'Chyba pri posielaní emailu');
                     }
 
                     setSuccess(`✅ Pozvánka odoslaná na ${email}!`);
                     setEmail('');
                     loadInvites();
                 } catch (err) {
+                    console.error('Invite error:', err);
                     setError(err.message || 'Chyba pri vytváraní pozvánky');
                 }
                 setLoading(false);
@@ -1712,7 +1714,7 @@
                                     Pozvať nového užívateľa
                                 </h3>
                                 <p className="text-sm text-gray-600 mb-4">
-                                    Zadajte email, vygeneruje sa pozvánkový link ktorý mu pošlete emailom.
+                                    Zadajte email a pozvánka sa automaticky pošle užívateľovi.
                                 </p>
                                 <form onSubmit={generateInvite} className="space-y-4">
                                     <div>
@@ -1745,12 +1747,12 @@
                                         style={{ background: '#e43826' }}
                                     >
                                         {loading && <Icon name="Loader2" className="w-5 h-5 animate-spin" />}
-                                        {loading ? 'Generujem...' : 'Vygenerovať link'}
+                                        {loading ? 'Odosielam...' : 'Odoslať pozvánku'}
                                     </button>
                                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                                         <p className="text-sm text-blue-800 flex items-start gap-2">
                                             <Icon name="Info" className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                            <span>Link sa automaticky skopíruje do schránky. Pošlite ho na zadaný email.</span>
+                                            <span>Email s pozvánkou sa pošle automaticky na zadanú adresu.</span>
                                         </p>
                                     </div>
                                 </form>
