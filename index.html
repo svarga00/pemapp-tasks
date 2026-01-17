@@ -410,18 +410,36 @@
 
         // AUTH SCREEN
         function AuthScreen() {
+            const [mode, setMode] = useState('login'); // 'login' alebo 'register'
             const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
             const [loading, setLoading] = useState(false);
-            const [sent, setSent] = useState(false);
             const [error, setError] = useState('');
 
             const handleLogin = async (e) => {
                 e.preventDefault();
                 setLoading(true);
                 setError('');
-                const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+                const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
                 if (error) setError(error.message);
-                else setSent(true);
+                setLoading(false);
+            };
+
+            const handleRegister = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError('');
+                const { error } = await supabaseClient.auth.signUp({ 
+                    email, 
+                    password,
+                    options: { emailRedirectTo: window.location.origin }
+                });
+                if (error) {
+                    setError(error.message);
+                } else {
+                    setError('');
+                    alert('Registrácia úspešná! Skontrolujte email pre potvrdenie.');
+                }
                 setLoading(false);
             };
 
@@ -431,26 +449,59 @@
                         <div className="flex flex-col items-center mb-8">
                             <img src="https://www.profielektromeister.sk/wp-content/uploads/2025/09/Logo-01-scaled-1-2048x2048.png" className="w-20 h-20 object-contain mb-4" />
                             <h1 className="text-2xl font-bold">PEMApp Tasks</h1>
-                            <p className="text-gray-500 text-sm">Prihláste sa emailom</p>
+                            <p className="text-gray-500 text-sm">Správa úloh pre tím</p>
                         </div>
-                        {sent ? (
-                            <div className="text-center">
-                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Icon name="Mail" className="w-8 h-8 text-green-600" />
-                                </div>
-                                <p className="font-semibold mb-2">Skontrolujte email</p>
-                                <p className="text-sm text-gray-500">Poslali sme link na <strong>{email}</strong></p>
+
+                        <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-lg">
+                            <button 
+                                onClick={() => setMode('login')} 
+                                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${mode === 'login' ? 'bg-white shadow' : 'text-gray-600'}`}
+                            >
+                                Prihlásenie
+                            </button>
+                            <button 
+                                onClick={() => setMode('register')} 
+                                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${mode === 'register' ? 'bg-white shadow' : 'text-gray-600'}`}
+                            >
+                                Registrácia
+                            </button>
+                        </div>
+
+                        <form onSubmit={mode === 'login' ? handleLogin : handleRegister} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Email</label>
+                                <input 
+                                    type="email" 
+                                    value={email} 
+                                    onChange={e => setEmail(e.target.value)} 
+                                    placeholder="vas@email.sk" 
+                                    className="w-full px-4 py-3 border-2 rounded-xl focus:border-red-500 outline-none" 
+                                    required 
+                                />
                             </div>
-                        ) : (
-                            <form onSubmit={handleLogin} className="space-y-4">
-                                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vas@email.sk" className="w-full px-4 py-3 border-2 rounded-xl focus:border-red-500 outline-none" required />
-                                {error && <p className="text-red-500 text-sm">{error}</p>}
-                                <button type="submit" disabled={loading} className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#e43826' }}>
-                                    {loading && <Icon name="Loader2" className="w-5 h-5 animate-spin" />}
-                                    {loading ? 'Odosielam...' : 'Poslať link'}
-                                </button>
-                            </form>
-                        )}
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Heslo</label>
+                                <input 
+                                    type="password" 
+                                    value={password} 
+                                    onChange={e => setPassword(e.target.value)} 
+                                    placeholder="••••••••" 
+                                    className="w-full px-4 py-3 border-2 rounded-xl focus:border-red-500 outline-none" 
+                                    required 
+                                    minLength={6}
+                                />
+                            </div>
+                            {error && <p className="text-red-500 text-sm">{error}</p>}
+                            <button 
+                                type="submit" 
+                                disabled={loading} 
+                                className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2" 
+                                style={{ background: '#e43826' }}
+                            >
+                                {loading && <Icon name="Loader2" className="w-5 h-5 animate-spin" />}
+                                {loading ? 'Prebieha...' : (mode === 'login' ? 'Prihlásiť sa' : 'Registrovať sa')}
+                            </button>
+                        </form>
                     </div>
                 </div>
             );
@@ -655,6 +706,46 @@
                                 </div>
                             </div>
 
+                            {/* Meeting Info Card */}
+                            {selectedMeeting !== 'all' && meetings.find(m => m.id === selectedMeeting) && (
+                                <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: '#e4382620' }}>
+                                                    <Icon name="Calendar" className="w-6 h-6" style={{ color: '#e43826' }} />
+                                                </div>
+                                                <div>
+                                                    <h2 className="text-xl font-bold">{meetings.find(m => m.id === selectedMeeting).title}</h2>
+                                                    <p className="text-sm text-gray-500">{new Date(meetings.find(m => m.id === selectedMeeting).date).toLocaleDateString('sk', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                                </div>
+                                            </div>
+                                            {meetings.find(m => m.id === selectedMeeting).description && (
+                                                <p className="text-gray-700 mb-3">{meetings.find(m => m.id === selectedMeeting).description}</p>
+                                            )}
+                                            {meetings.find(m => m.id === selectedMeeting).video_url && (
+                                                <a 
+                                                    href={meetings.find(m => m.id === selectedMeeting).video_url} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                                                >
+                                                    <Icon name="Play" className="w-4 h-4" />
+                                                    Video záznam meetingu
+                                                </a>
+                                            )}
+                                        </div>
+                                        <button 
+                                            onClick={() => setSelectedMeeting('all')} 
+                                            className="p-2 hover:bg-gray-100 rounded-lg"
+                                            title="Zavrieť"
+                                        >
+                                            <Icon name="X" className="w-5 h-5 text-gray-400" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Filters */}
                             <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -747,6 +838,11 @@
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <div className="flex items-center gap-2 text-xs text-gray-600">
+                                                            {task.audio_url && (
+                                                                <div className="flex items-center gap-1 text-purple-600" title="Audio popis úlohy">
+                                                                    <Icon name="AudioLines" className="w-3.5 h-3.5" />
+                                                                </div>
+                                                            )}
                                                             <div className="flex items-center gap-1" title="Komentáre">
                                                                 <Icon name="MessageCircle" className="w-3.5 h-3.5" />
                                                                 <span>{task.comments_count || 0}</span>
@@ -819,7 +915,7 @@
             const [assignees, setAssignees] = useState((task.assignees || []).map(a => a.id));
             const [editingAssignees, setEditingAssignees] = useState(false);
             const [recordingAudio, setRecordingAudio] = useState(false);
-            const [recordingVideo, setRecordingVideo] = useState(false);
+            const [screenshotComments, setScreenshotComments] = useState({});
 
             useEffect(() => { loadComments(); loadScreenshots(); loadHistory(); }, [task.id]);
 
@@ -829,8 +925,19 @@
             };
 
             const loadScreenshots = async () => {
-                const { data } = await supabaseClient.from('screenshots').select('*, profiles(*)').eq('task_id', task.id).order('created_at', { ascending: false });
+                const { data } = await supabaseClient.from('screenshots').select('*, profiles(*), screenshot_comments(*, profiles(*))').eq('task_id', task.id).order('created_at', { ascending: false });
                 setScreenshots(data || []);
+            };
+
+            const addScreenshotComment = async (screenshotId, text) => {
+                if (!text.trim()) return;
+                await supabaseClient.from('screenshot_comments').insert({
+                    screenshot_id: screenshotId,
+                    author_id: currentUser?.id,
+                    text
+                });
+                setScreenshotComments({ ...screenshotComments, [screenshotId]: '' });
+                loadScreenshots();
             };
 
             const loadHistory = async () => {
@@ -853,7 +960,7 @@
             const saveAssignees = async () => {
                 await supabaseClient.from('task_assignees').delete().eq('task_id', task.id);
                 if (assignees.length) await supabaseClient.from('task_assignees').insert(assignees.map(uid => ({ task_id: task.id, user_id: uid })));
-                await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'assignee_change', details: 'Riešitelia zmenení' });
+                await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'assignee_change', details: 'Zmenení riešitelia' });
                 setEditingAssignees(false);
                 loadTasks();
                 loadHistory();
@@ -866,14 +973,13 @@
                     author_id: currentUser?.id, 
                     text: type === 'text' ? content : null,
                     audio_url: type === 'audio' ? content : null,
-                    video_url: type === 'video' ? content : null,
                     comment_type: type
                 });
                 await supabaseClient.from('task_history').insert({ 
                     task_id: task.id, 
                     user_id: currentUser?.id, 
                     action: 'comment_added', 
-                    details: type === 'text' ? `Komentár: "${content.substring(0, 30)}..."` : `${type === 'audio' ? 'Audio' : 'Video'} komentár pridaný`
+                    details: type === 'text' ? `Komentár: "${content.substring(0, 30)}..."` : 'Audio komentár pridaný'
                 });
                 setNewComment('');
                 loadComments();
@@ -980,6 +1086,19 @@
                                         )}
                                     </div>
 
+                                    {task.audio_url && (
+                                        <div className="mb-6">
+                                            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2 flex items-center gap-2">
+                                                <Icon name="AudioLines" className="w-4 h-4" />
+                                                Audio popis zadania
+                                            </h3>
+                                            <audio controls className="w-full max-w-md">
+                                                <source src={task.audio_url} type="audio/webm" />
+                                                <source src={task.audio_url} type="audio/mp4" />
+                                            </audio>
+                                        </div>
+                                    )}
+
                                     {editing && (
                                         <div className="mb-6">
                                             <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Typ</h3>
@@ -1021,7 +1140,7 @@
 
                                     <div>
                                         <div className="flex justify-between items-center mb-3">
-                                            <h3 className="text-sm font-semibold text-gray-500 uppercase">Riešitelia ({(task.assignees || []).length})</h3>
+                                            <h3 className="text-sm font-semibold text-gray-500 uppercase">Kto rieši ({(task.assignees || []).length})</h3>
                                             <button onClick={() => { setEditingAssignees(true); setAssignees((task.assignees || []).map(a => a.id)); }} className="text-sm text-blue-600">Upraviť</button>
                                         </div>
                                         {editingAssignees ? (
@@ -1057,17 +1176,14 @@
 
                             {tab === 'comments' && (
                                 <div>
-                                    {!recordingAudio && !recordingVideo && (
+                                    {!recordingAudio && (
                                         <div className="flex gap-2 mb-4">
                                             <input value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && addComment('text')} placeholder="Napíšte komentár..." className="flex-1 px-4 py-2 border rounded-lg" />
                                             <button onClick={() => addComment('text')} className="px-4 py-2 rounded-lg text-white" style={{ background: '#369d52' }}>
                                                 <Icon name="Send" className="w-5 h-5" />
                                             </button>
-                                            <button onClick={() => setRecordingAudio(true)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">
+                                            <button onClick={() => setRecordingAudio(true)} className="px-4 py-2 border rounded-lg hover:bg-gray-50" title="Nahrať audio komentár">
                                                 <Icon name="Mic" className="w-5 h-5" />
-                                            </button>
-                                            <button onClick={() => setRecordingVideo(true)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">
-                                                <Icon name="Video" className="w-5 h-5" />
                                             </button>
                                         </div>
                                     )}
@@ -1078,16 +1194,6 @@
                                                 type="audio" 
                                                 onComplete={(url) => { addComment('audio', url); setRecordingAudio(false); }}
                                                 onCancel={() => setRecordingAudio(false)}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {recordingVideo && (
-                                        <div className="mb-4">
-                                            <AudioVideoRecorder 
-                                                type="video" 
-                                                onComplete={(url) => { addComment('video', url); setRecordingVideo(false); }}
-                                                onCancel={() => setRecordingVideo(false)}
                                             />
                                         </div>
                                     )}
@@ -1112,12 +1218,8 @@
                                                     {c.comment_type === 'audio' && (
                                                         <audio controls className="w-full max-w-md">
                                                             <source src={c.audio_url} type="audio/webm" />
+                                                            <source src={c.audio_url} type="audio/mp4" />
                                                         </audio>
-                                                    )}
-                                                    {c.comment_type === 'video' && (
-                                                        <video controls className="w-full max-w-md rounded-lg">
-                                                            <source src={c.video_url} type="video/webm" />
-                                                        </video>
                                                     )}
                                                 </div>
                                             </div>
@@ -1132,16 +1234,52 @@
                                         <Icon name="Clipboard" className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                                         <p className="text-gray-600">Vložte screenshot (Ctrl+V)</p>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-6">
                                         {screenshots.map(s => (
-                                            <div key={s.id} className="border rounded-lg overflow-hidden group relative">
-                                                <img src={s.file_url} className="w-full h-40 object-cover cursor-pointer" onClick={() => window.open(s.file_url)} />
-                                                <button onClick={() => deleteScreenshot(s.id)} className="absolute top-2 right-2 p-2 bg-white rounded-lg opacity-0 group-hover:opacity-100">
-                                                    <Icon name="Trash2" className="w-4 h-4 text-red-500" />
-                                                </button>
-                                                <div className="p-2 bg-gray-50 flex items-center gap-2">
-                                                    <UserAvatar user={s.profiles} size="sm" />
-                                                    <span className="text-xs text-gray-500">{new Date(s.created_at).toLocaleString('sk')}</span>
+                                            <div key={s.id} className="border rounded-lg overflow-hidden group">
+                                                <div className="relative">
+                                                    <img src={s.file_url} className="w-full h-64 object-cover cursor-pointer" onClick={() => window.open(s.file_url)} />
+                                                    <button onClick={() => deleteScreenshot(s.id)} className="absolute top-2 right-2 p-2 bg-white rounded-lg opacity-0 group-hover:opacity-100">
+                                                        <Icon name="Trash2" className="w-4 h-4 text-red-500" />
+                                                    </button>
+                                                </div>
+                                                <div className="p-3 bg-gray-50">
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <UserAvatar user={s.profiles} size="sm" />
+                                                        <span className="text-xs text-gray-500">{new Date(s.created_at).toLocaleString('sk')}</span>
+                                                    </div>
+                                                    
+                                                    {/* Komentáre k screenshotu */}
+                                                    {s.screenshot_comments && s.screenshot_comments.length > 0 && (
+                                                        <div className="space-y-2 mb-3 pl-8">
+                                                            {s.screenshot_comments.map(sc => (
+                                                                <div key={sc.id} className="flex items-start gap-2 text-sm bg-white rounded p-2">
+                                                                    <UserAvatar user={sc.profiles} size="sm" />
+                                                                    <div className="flex-1">
+                                                                        <span className="font-medium">{sc.profiles?.name}:</span> {sc.text}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Input na komentár */}
+                                                    <div className="flex gap-2 pl-8">
+                                                        <input 
+                                                            value={screenshotComments[s.id] || ''} 
+                                                            onChange={e => setScreenshotComments({ ...screenshotComments, [s.id]: e.target.value })}
+                                                            onKeyDown={e => e.key === 'Enter' && addScreenshotComment(s.id, screenshotComments[s.id])}
+                                                            placeholder="Pridať komentár..." 
+                                                            className="flex-1 px-3 py-1.5 text-sm border rounded-lg"
+                                                        />
+                                                        <button 
+                                                            onClick={() => addScreenshotComment(s.id, screenshotComments[s.id])}
+                                                            className="px-3 py-1.5 rounded-lg text-white text-sm"
+                                                            style={{ background: '#369d52' }}
+                                                        >
+                                                            <Icon name="Send" className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -1247,7 +1385,7 @@
                                     )}
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-2">Riešitelia</label>
+                                    <label className="block text-sm font-medium mb-2">Kto rieši</label>
                                     <div className="grid grid-cols-2 gap-2 border rounded-lg p-3 max-h-40 overflow-y-auto">
                                         {teamMembers.map(m => (
                                             <label key={m.id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${form.assignees.includes(m.id) ? 'bg-green-50' : 'hover:bg-gray-50'}`}>
