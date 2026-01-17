@@ -87,6 +87,12 @@
 
             const startRecording = async () => {
                 try {
+                    // Skontroluj či je getUserMedia podporované
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        alert('Váš prehliadač nepodporuje nahrávanie. Použite Chrome, Firefox alebo Edge.');
+                        return;
+                    }
+
                     const constraints = type === 'video' 
                         ? { video: { width: 1280, height: 720 }, audio: true }
                         : { audio: true };
@@ -99,11 +105,34 @@
                         videoRef.current.play();
                     }
 
-                    const mimeType = type === 'video' 
-                        ? 'video/webm;codecs=vp8,opus'
-                        : 'audio/webm;codecs=opus';
+                    // Skús rôzne MIME types
+                    let mimeType;
+                    if (type === 'video') {
+                        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+                            mimeType = 'video/webm;codecs=vp9,opus';
+                        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+                            mimeType = 'video/webm;codecs=vp8,opus';
+                        } else if (MediaRecorder.isTypeSupported('video/webm')) {
+                            mimeType = 'video/webm';
+                        } else {
+                            mimeType = '';
+                        }
+                    } else {
+                        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                            mimeType = 'audio/webm;codecs=opus';
+                        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                            mimeType = 'audio/webm';
+                        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                            mimeType = 'audio/mp4';
+                        } else {
+                            mimeType = '';
+                        }
+                    }
                     
-                    mediaRecorderRef.current = new window.MediaRecorder(stream, { mimeType });
+                    mediaRecorderRef.current = mimeType 
+                        ? new window.MediaRecorder(stream, { mimeType })
+                        : new window.MediaRecorder(stream);
+                    
                     chunksRef.current = [];
 
                     mediaRecorderRef.current.ondataavailable = (e) => {
@@ -112,20 +141,31 @@
 
                     mediaRecorderRef.current.onstop = async () => {
                         setProcessing(true);
-                        const blob = new Blob(chunksRef.current, { type: mimeType });
-                        const file = new File([blob], `${type}_${Date.now()}.webm`, { type: mimeType });
+                        const finalMimeType = mediaRecorderRef.current.mimeType || (type === 'video' ? 'video/webm' : 'audio/webm');
+                        const blob = new Blob(chunksRef.current, { type: finalMimeType });
+                        const extension = finalMimeType.includes('mp4') ? 'mp4' : 'webm';
+                        const file = new File([blob], `${type}_${Date.now()}.${extension}`, { type: finalMimeType });
                         
-                        const fileName = `${type}s/${type}_${Date.now()}.webm`;
+                        const fileName = `${type}s/${type}_${Date.now()}.${extension}`;
                         const { error } = await supabaseClient.storage.from('media').upload(fileName, file);
                         
                         if (!error) {
                             const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(fileName);
                             onComplete(publicUrl);
+                        } else {
+                            console.error('Upload error:', error);
+                            alert('Chyba pri nahrávaní súboru.');
                         }
                         setProcessing(false);
                     };
 
-                    mediaRecorderRef.current.start();
+                    mediaRecorderRef.current.onerror = (e) => {
+                        console.error('MediaRecorder error:', e);
+                        alert('Chyba pri nahrávaní.');
+                        stopRecording(true);
+                    };
+
+                    mediaRecorderRef.current.start(1000); // Zbieraj data každú sekundu
                     setRecording(true);
                     setDuration(0);
                     
@@ -134,7 +174,17 @@
                     }, 1000);
                 } catch (err) {
                     console.error('Recording error:', err);
-                    alert('Chyba pri nahrávaní. Povoľte prístup k ' + (type === 'video' ? 'kamere a' : '') + ' mikrofónu.');
+                    let errorMsg = 'Chyba pri nahrávaní. ';
+                    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                        errorMsg += 'Povoľte prístup k ' + (type === 'video' ? 'kamere a ' : '') + 'mikrofónu.';
+                    } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                        errorMsg += (type === 'video' ? 'Kamera alebo m' : 'M') + 'ikrofón nebol nájdený.';
+                    } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                        errorMsg += 'Zariadenie je už používané inou aplikáciou.';
+                    } else {
+                        errorMsg += err.message || 'Neznáma chyba.';
+                    }
+                    alert(errorMsg);
                 }
             };
 
@@ -441,7 +491,8 @@
             const loadProfile = async (userId) => {
                 const { data } = await supabaseClient.from('profiles').select('*').eq('id', userId).single();
                 setCurrentUser(data);
-                if (data && (!data.name || data.name.includes('@') || data.name === data.email?.split('@')[0])) {
+                // Profile setup len ak NAOZAJ nemá meno (úplne prázdne)
+                if (data && !data.name) {
                     setIsFirstTime(true);
                     setShowProfileSetup(true);
                 }
