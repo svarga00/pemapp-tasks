@@ -338,7 +338,7 @@
 
             const uploadAvatar = async (e) => {
                 const file = e.target.files?.[0];
-                if (!file) return;
+                if (!file || !user?.id) return;
                 setUploading(true);
                 const fileName = `avatar_${user.id}_${Date.now()}.${file.name.split('.').pop()}`;
                 const { error } = await supabaseClient.storage.from('media').upload(`avatars/${fileName}`, file);
@@ -384,7 +384,6 @@
                                         <option>Designer</option>
                                         <option>Project Manager</option>
                                         <option>Tester</option>
-                                        <option>Admin</option>
                                     </select>
                                 </div>
                                 <div>
@@ -637,7 +636,7 @@
             
             // Skontroluj či je invite token v URL
             const urlParams = new URLSearchParams(window.location.search);
-            const inviteToken = urlParams.get('token');
+            const inviteToken = urlParams.get('token') || urlParams.get('invite') || urlParams.get('invite_token');
 
             // Ak je invite token, zobraz registračnú stránku
             if (inviteToken && !session) {
@@ -731,6 +730,10 @@
             }, [session, isModalOpen]);
 
             const saveProfile = async (data) => {
+                if (!currentUser?.id) {
+                    console.error('Cannot save profile: currentUser is null');
+                    return;
+                }
                 await supabaseClient.from('profiles').update(data).eq('id', currentUser.id);
                 setCurrentUser({ ...currentUser, ...data });
                 setShowProfileSetup(false);
