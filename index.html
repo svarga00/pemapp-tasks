@@ -18,6 +18,8 @@
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .recording-pulse { animation: recordingPulse 1.5s ease-in-out infinite; }
+        @keyframes recordingPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } }
     </style>
 </head>
 <body>
@@ -65,6 +67,172 @@
         };
 
         const colorOptions = ['#e43826', '#369d52', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6'];
+
+        // MEDIA RECORDER COMPONENT
+        function MediaRecorder({ type = 'audio', onComplete, onCancel }) {
+            const [recording, setRecording] = useState(false);
+            const [duration, setDuration] = useState(0);
+            const [processing, setProcessing] = useState(false);
+            const mediaRecorderRef = useRef(null);
+            const chunksRef = useRef([]);
+            const streamRef = useRef(null);
+            const timerRef = useRef(null);
+            const videoRef = useRef(null);
+
+            useEffect(() => {
+                return () => {
+                    stopRecording(true);
+                };
+            }, []);
+
+            const startRecording = async () => {
+                try {
+                    const constraints = type === 'video' 
+                        ? { video: { width: 1280, height: 720 }, audio: true }
+                        : { audio: true };
+                    
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    streamRef.current = stream;
+                    
+                    if (type === 'video' && videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        videoRef.current.play();
+                    }
+
+                    const mimeType = type === 'video' 
+                        ? 'video/webm;codecs=vp8,opus'
+                        : 'audio/webm;codecs=opus';
+                    
+                    mediaRecorderRef.current = new window.MediaRecorder(stream, { mimeType });
+                    chunksRef.current = [];
+
+                    mediaRecorderRef.current.ondataavailable = (e) => {
+                        if (e.data.size > 0) chunksRef.current.push(e.data);
+                    };
+
+                    mediaRecorderRef.current.onstop = async () => {
+                        setProcessing(true);
+                        const blob = new Blob(chunksRef.current, { type: mimeType });
+                        const file = new File([blob], `${type}_${Date.now()}.webm`, { type: mimeType });
+                        
+                        const fileName = `${type}s/${type}_${Date.now()}.webm`;
+                        const { error } = await supabaseClient.storage.from('media').upload(fileName, file);
+                        
+                        if (!error) {
+                            const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(fileName);
+                            onComplete(publicUrl);
+                        }
+                        setProcessing(false);
+                    };
+
+                    mediaRecorderRef.current.start();
+                    setRecording(true);
+                    setDuration(0);
+                    
+                    timerRef.current = setInterval(() => {
+                        setDuration(d => d + 1);
+                    }, 1000);
+                } catch (err) {
+                    console.error('Recording error:', err);
+                    alert('Chyba pri nahrávaní. Povoľte prístup k ' + (type === 'video' ? 'kamere a' : '') + ' mikrofónu.');
+                }
+            };
+
+            const stopRecording = (cancel = false) => {
+                if (timerRef.current) {
+                    clearInterval(timerRef.current);
+                    timerRef.current = null;
+                }
+                
+                if (streamRef.current) {
+                    streamRef.current.getTracks().forEach(track => track.stop());
+                    streamRef.current = null;
+                }
+
+                if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                    mediaRecorderRef.current.stop();
+                    if (cancel) {
+                        mediaRecorderRef.current.onstop = null;
+                        onCancel?.();
+                    }
+                }
+                
+                setRecording(false);
+            };
+
+            const formatTime = (seconds) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            };
+
+            if (processing) {
+                return (
+                    <div className="flex items-center justify-center gap-3 p-4 bg-blue-50 rounded-lg">
+                        <Icon name="Loader2" className="w-5 h-5 animate-spin text-blue-600" />
+                        <span className="text-sm font-medium text-blue-600">Spracovávam...</span>
+                    </div>
+                );
+            }
+
+            if (!recording) {
+                return (
+                    <div className="flex gap-2">
+                        <button
+                            onClick={startRecording}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-white"
+                            style={{ background: '#e43826' }}
+                        >
+                            <Icon name={type === 'video' ? 'Video' : 'Mic'} className="w-4 h-4" />
+                            {type === 'video' ? 'Nahrať video' : 'Nahrať audio'}
+                        </button>
+                        {onCancel && (
+                            <button onClick={onCancel} className="px-4 py-2 border rounded-lg">
+                                Zrušiť
+                            </button>
+                        )}
+                    </div>
+                );
+            }
+
+            return (
+                <div className="space-y-3">
+                    {type === 'video' && (
+                        <video
+                            ref={videoRef}
+                            autoPlay
+                            muted
+                            className="w-full rounded-lg bg-black"
+                            style={{ maxHeight: '300px' }}
+                        />
+                    )}
+                    <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 bg-red-600 rounded-full recording-pulse" />
+                            <span className="font-mono text-lg font-bold text-red-600">
+                                {formatTime(duration)}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => stopRecording(true)}
+                                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                            >
+                                Zrušiť
+                            </button>
+                            <button
+                                onClick={() => stopRecording(false)}
+                                className="px-4 py-2 rounded-lg text-white"
+                                style={{ background: '#369d52' }}
+                            >
+                                <Icon name="Check" className="w-4 h-4 inline mr-1" />
+                                Hotovo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
 
         // CONFIRM DIALOG
         function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }) {
@@ -253,6 +421,9 @@
             const [showTeam, setShowTeam] = useState(false);
             const [confirmDialog, setConfirmDialog] = useState({ isOpen: false });
 
+            // Track if any modal is open
+            const isModalOpen = selectedTask || showNewTask || showNewMeeting || showTeam || showProfileSetup;
+
             useEffect(() => {
                 supabaseClient.auth.getSession().then(({ data: { session } }) => {
                     setSession(session);
@@ -298,16 +469,26 @@
                 setTeamMembers(data || []);
             };
 
+            // SMART REAL-TIME: Only update when NO modal is open
             useEffect(() => {
                 if (!session) return;
+                
+                const handleChange = () => {
+                    // Only reload if NO modal is open
+                    if (!isModalOpen) {
+                        loadTasks();
+                    }
+                };
+
                 const channel = supabaseClient.channel('changes')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, loadTasks)
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignees' }, loadTasks)
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, loadMeetings)
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, loadTeam)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, handleChange)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignees' }, handleChange)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => !isModalOpen && loadMeetings())
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => !isModalOpen && loadTeam())
                     .subscribe();
+                    
                 return () => supabaseClient.removeChannel(channel);
-            }, [session]);
+            }, [session, isModalOpen]);
 
             const saveProfile = async (data) => {
                 await supabaseClient.from('profiles').update(data).eq('id', currentUser.id);
@@ -541,6 +722,8 @@
             const [newComment, setNewComment] = useState('');
             const [assignees, setAssignees] = useState((task.assignees || []).map(a => a.id));
             const [editingAssignees, setEditingAssignees] = useState(false);
+            const [recordingAudio, setRecordingAudio] = useState(false);
+            const [recordingVideo, setRecordingVideo] = useState(false);
 
             useEffect(() => { loadComments(); loadScreenshots(); loadHistory(); }, [task.id]);
 
@@ -580,10 +763,22 @@
                 loadHistory();
             };
 
-            const addComment = async () => {
-                if (!newComment.trim()) return;
-                await supabaseClient.from('comments').insert({ task_id: task.id, author_id: currentUser?.id, text: newComment, comment_type: 'text' });
-                await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'comment_added', details: `Komentár: "${newComment.substring(0, 30)}..."` });
+            const addComment = async (type = 'text', content = newComment) => {
+                if (type === 'text' && !content.trim()) return;
+                await supabaseClient.from('comments').insert({ 
+                    task_id: task.id, 
+                    author_id: currentUser?.id, 
+                    text: type === 'text' ? content : null,
+                    audio_url: type === 'audio' ? content : null,
+                    video_url: type === 'video' ? content : null,
+                    comment_type: type
+                });
+                await supabaseClient.from('task_history').insert({ 
+                    task_id: task.id, 
+                    user_id: currentUser?.id, 
+                    action: 'comment_added', 
+                    details: type === 'text' ? `Komentár: "${content.substring(0, 30)}..."` : `${type === 'audio' ? 'Audio' : 'Video'} komentár pridaný`
+                });
                 setNewComment('');
                 loadComments();
                 loadHistory();
@@ -766,12 +961,41 @@
 
                             {tab === 'comments' && (
                                 <div>
-                                    <div className="flex gap-2 mb-4">
-                                        <input value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && addComment()} placeholder="Napíšte komentár..." className="flex-1 px-4 py-2 border rounded-lg" />
-                                        <button onClick={addComment} className="px-4 py-2 rounded-lg text-white" style={{ background: '#369d52' }}>
-                                            <Icon name="Send" className="w-5 h-5" />
-                                        </button>
-                                    </div>
+                                    {!recordingAudio && !recordingVideo && (
+                                        <div className="flex gap-2 mb-4">
+                                            <input value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && addComment('text')} placeholder="Napíšte komentár..." className="flex-1 px-4 py-2 border rounded-lg" />
+                                            <button onClick={() => addComment('text')} className="px-4 py-2 rounded-lg text-white" style={{ background: '#369d52' }}>
+                                                <Icon name="Send" className="w-5 h-5" />
+                                            </button>
+                                            <button onClick={() => setRecordingAudio(true)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">
+                                                <Icon name="Mic" className="w-5 h-5" />
+                                            </button>
+                                            <button onClick={() => setRecordingVideo(true)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">
+                                                <Icon name="Video" className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    )}
+                                    
+                                    {recordingAudio && (
+                                        <div className="mb-4">
+                                            <MediaRecorder 
+                                                type="audio" 
+                                                onComplete={(url) => { addComment('audio', url); setRecordingAudio(false); }}
+                                                onCancel={() => setRecordingAudio(false)}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {recordingVideo && (
+                                        <div className="mb-4">
+                                            <MediaRecorder 
+                                                type="video" 
+                                                onComplete={(url) => { addComment('video', url); setRecordingVideo(false); }}
+                                                onCancel={() => setRecordingVideo(false)}
+                                            />
+                                        </div>
+                                    )}
+
                                     <div className="space-y-3">
                                         {comments.map(c => (
                                             <div key={c.id} className="bg-gray-50 rounded-lg p-3 group">
@@ -787,7 +1011,19 @@
                                                         </button>
                                                     )}
                                                 </div>
-                                                <p className="text-sm ml-8">{c.text}</p>
+                                                <div className="ml-8">
+                                                    {c.comment_type === 'text' && <p className="text-sm">{c.text}</p>}
+                                                    {c.comment_type === 'audio' && (
+                                                        <audio controls className="w-full max-w-md">
+                                                            <source src={c.audio_url} type="audio/webm" />
+                                                        </audio>
+                                                    )}
+                                                    {c.comment_type === 'video' && (
+                                                        <video controls className="w-full max-w-md rounded-lg">
+                                                            <source src={c.video_url} type="video/webm" />
+                                                        </video>
+                                                    )}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -855,8 +1091,9 @@
                 meeting_id: selectedMeeting !== 'all' ? selectedMeeting : null,
                 type: 'feature', title: '', description: '',
                 deadline: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-                estimate: 4, assignees: []
+                estimate: 4, assignees: [], audio_url: null
             });
+            const [recordingAudio, setRecordingAudio] = useState(false);
 
             return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -891,6 +1128,27 @@
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Popis</label>
                                     <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full px-4 py-2 border rounded-lg" placeholder="Popis..." />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Audio popis zadania</label>
+                                    {form.audio_url ? (
+                                        <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
+                                            <Icon name="Check" className="w-5 h-5 text-green-600" />
+                                            <span className="text-sm text-green-600 flex-1">Audio nahrané</span>
+                                            <button onClick={() => setForm({ ...form, audio_url: null })} className="text-sm text-red-600">Zmazať</button>
+                                        </div>
+                                    ) : recordingAudio ? (
+                                        <MediaRecorder 
+                                            type="audio" 
+                                            onComplete={(url) => { setForm({ ...form, audio_url: url }); setRecordingAudio(false); }}
+                                            onCancel={() => setRecordingAudio(false)}
+                                        />
+                                    ) : (
+                                        <button onClick={() => setRecordingAudio(true)} className="w-full px-4 py-2 border-2 border-dashed rounded-lg hover:border-gray-400 flex items-center justify-center gap-2 text-gray-600">
+                                            <Icon name="Mic" className="w-5 h-5" />
+                                            Nahrať audio popis
+                                        </button>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium mb-2">Riešitelia</label>
@@ -947,6 +1205,10 @@
                             <div>
                                 <label className="block text-sm font-medium mb-1">Video URL</label>
                                 <input value={form.video_url} onChange={e => setForm({ ...form, video_url: e.target.value })} className="w-full px-4 py-2 border rounded-lg" placeholder="https://..." />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Popis</label>
+                                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full px-4 py-2 border rounded-lg" placeholder="Popis meetingu..." />
                             </div>
                             <div className="flex gap-3">
                                 <button onClick={onClose} className="flex-1 px-4 py-2 border rounded-lg">Zrušiť</button>
