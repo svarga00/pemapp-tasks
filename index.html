@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         * { font-family: 'Rubik', sans-serif; }
@@ -32,7 +32,7 @@
         const SUPABASE_URL = 'https://wobzkibpjxzikdmkumlf.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvYnpraWJwanh6aWtkbWt1bWxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2MTYyNTEsImV4cCI6MjA4NDE5MjI1MX0.qG-Smp-LW4BaCKMNx-NngSs9On7sdhadY5EcDhINMDA';
 
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // =====================================================
         // ICONS
@@ -182,9 +182,9 @@
                 try {
                     const fileName = `${type}_${Date.now()}_${currentUser?.id || 'unknown'}.webm`;
                     const filePath = `${type}s/${fileName}`;
-                    const { error: uploadError } = await supabase.storage.from('media').upload(filePath, blob, { contentType: blob.type });
+                    const { error: uploadError } = await supabaseClient.storage.from('media').upload(filePath, blob, { contentType: blob.type });
                     if (uploadError) throw uploadError;
-                    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(filePath);
+                    const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(filePath);
                     onSave(publicUrl);
                     resetRecording();
                 } catch (err) {
@@ -262,7 +262,7 @@
                 setIsLoading(true);
                 setError('');
                 try {
-                    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+                    const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
                     if (error) throw error;
                     setIsSent(true);
                 } catch (err) {
@@ -327,13 +327,13 @@
             const [showActivityLog, setShowActivityLog] = useState(false);
 
             useEffect(() => {
-                supabase.auth.getSession().then(({ data: { session } }) => {
+                supabaseClient.auth.getSession().then(({ data: { session } }) => {
                     setSession(session);
                     if (session) loadUserProfile(session.user.id);
                     else setIsLoading(false);
                 });
 
-                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
                     setSession(session);
                     if (session) loadUserProfile(session.user.id);
                     else { setCurrentUser(null); setIsLoading(false); }
@@ -343,7 +343,7 @@
             }, []);
 
             const loadUserProfile = async (userId) => {
-                const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+                const { data } = await supabaseClient.from('profiles').select('*').eq('id', userId).single();
                 setCurrentUser(data);
                 loadAllData();
             };
@@ -355,32 +355,32 @@
             };
 
             const loadMeetings = async () => {
-                const { data } = await supabase.from('meetings').select('*').order('date', { ascending: false });
+                const { data } = await supabaseClient.from('meetings').select('*').order('date', { ascending: false });
                 setMeetings(data || []);
             };
 
             const loadTasks = async () => {
-                const { data } = await supabase.from('tasks_with_assignees').select('*').order('priority');
+                const { data } = await supabaseClient.from('tasks_with_assignees').select('*').order('priority');
                 setTasks(data || []);
             };
 
             const loadTeamMembers = async () => {
-                const { data } = await supabase.from('profiles').select('*').order('name');
+                const { data } = await supabaseClient.from('profiles').select('*').order('name');
                 setTeamMembers(data || []);
             };
 
             useEffect(() => {
                 if (!session) return;
-                const channel = supabase.channel('changes')
+                const channel = supabaseClient.channel('changes')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadTasks())
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignees' }, () => loadTasks())
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => loadMeetings())
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadTeamMembers())
                     .subscribe();
-                return () => supabase.removeChannel(channel);
+                return () => supabaseClient.removeChannel(channel);
             }, [session]);
 
-            const handleLogout = async () => { await supabase.auth.signOut(); };
+            const handleLogout = async () => { await supabaseClient.auth.signOut(); };
 
             const getUserById = (id) => teamMembers.find(u => u.id === id) || { name: 'Neznámy', color: '#999' };
 
@@ -394,26 +394,26 @@
             const createTask = async (taskData) => {
                 const { assignees, ...task } = taskData;
                 const maxPriority = Math.max(...tasks.map(t => t.priority), 0);
-                const { data: newTask, error } = await supabase.from('tasks').insert({ ...task, priority: maxPriority + 1, created_by: currentUser?.id }).select().single();
+                const { data: newTask, error } = await supabaseClient.from('tasks').insert({ ...task, priority: maxPriority + 1, created_by: currentUser?.id }).select().single();
                 if (error) { console.error(error); return; }
                 if (assignees?.length) {
-                    await supabase.from('task_assignees').insert(assignees.map(userId => ({ task_id: newTask.id, user_id: userId })));
+                    await supabaseClient.from('task_assignees').insert(assignees.map(userId => ({ task_id: newTask.id, user_id: userId })));
                 }
-                await supabase.from('task_history').insert({ task_id: newTask.id, user_id: currentUser?.id, action: 'created', details: 'Úloha vytvorená' });
+                await supabaseClient.from('task_history').insert({ task_id: newTask.id, user_id: currentUser?.id, action: 'created', details: 'Úloha vytvorená' });
                 loadTasks();
                 setShowNewTaskModal(false);
             };
 
             const updateTask = async (taskId, updates, historyAction, historyDetails) => {
-                await supabase.from('tasks').update(updates).eq('id', taskId);
+                await supabaseClient.from('tasks').update(updates).eq('id', taskId);
                 if (historyAction && historyDetails) {
-                    await supabase.from('task_history').insert({ task_id: taskId, user_id: currentUser?.id, action: historyAction, details: historyDetails });
+                    await supabaseClient.from('task_history').insert({ task_id: taskId, user_id: currentUser?.id, action: historyAction, details: historyDetails });
                 }
                 loadTasks();
             };
 
             const deleteTask = async (taskId) => {
-                await supabase.from('tasks').delete().eq('id', taskId);
+                await supabaseClient.from('tasks').delete().eq('id', taskId);
                 setSelectedTask(null);
                 loadTasks();
             };
@@ -424,18 +424,18 @@
                 const currentTask = sortedTasks[currentIndex];
                 if (direction === 'up' && currentIndex > 0) {
                     const targetTask = sortedTasks[currentIndex - 1];
-                    await supabase.from('tasks').update({ priority: targetTask.priority }).eq('id', currentTask.id);
-                    await supabase.from('tasks').update({ priority: currentTask.priority }).eq('id', targetTask.id);
+                    await supabaseClient.from('tasks').update({ priority: targetTask.priority }).eq('id', currentTask.id);
+                    await supabaseClient.from('tasks').update({ priority: currentTask.priority }).eq('id', targetTask.id);
                 } else if (direction === 'down' && currentIndex < sortedTasks.length - 1) {
                     const targetTask = sortedTasks[currentIndex + 1];
-                    await supabase.from('tasks').update({ priority: targetTask.priority }).eq('id', currentTask.id);
-                    await supabase.from('tasks').update({ priority: currentTask.priority }).eq('id', targetTask.id);
+                    await supabaseClient.from('tasks').update({ priority: targetTask.priority }).eq('id', currentTask.id);
+                    await supabaseClient.from('tasks').update({ priority: currentTask.priority }).eq('id', targetTask.id);
                 }
                 loadTasks();
             };
 
             const createMeeting = async (meetingData) => {
-                await supabase.from('meetings').insert({ ...meetingData, created_by: currentUser?.id });
+                await supabaseClient.from('meetings').insert({ ...meetingData, created_by: currentUser?.id });
                 loadMeetings();
                 setShowNewMeetingModal(false);
             };
@@ -443,7 +443,7 @@
             if (!session) return <AuthScreen />;
             if (isLoading) return <div className="min-h-screen flex items-center justify-center" style={{ background: '#f5f5f5' }}><Icon name="Loader2" className="w-8 h-8 animate-spin text-gray-400" /></div>;
 
-            const contextValue = { currentUser, teamMembers, getUserById, supabase, loadTasks };
+            const contextValue = { currentUser, teamMembers, getUserById, supabaseClient, loadTasks };
 
             return (
                 <AppContext.Provider value={contextValue}>
@@ -635,7 +635,7 @@
         // TASK DETAIL MODAL
         // =====================================================
         function TaskDetailModal({ task, meetings, onClose, onUpdate, onDelete }) {
-            const { currentUser, teamMembers, supabase, loadTasks } = useApp();
+            const { currentUser, teamMembers, supabaseClient, loadTasks } = useApp();
             const [detailTab, setDetailTab] = useState('detail');
             const [newComment, setNewComment] = useState('');
             const [comments, setComments] = useState([]);
@@ -649,17 +649,17 @@
             useEffect(() => { loadComments(); loadScreenshots(); loadHistory(); }, [task.id]);
 
             const loadComments = async () => {
-                const { data } = await supabase.from('comments').select('*, profiles(*)').eq('task_id', task.id).order('created_at');
+                const { data } = await supabaseClient.from('comments').select('*, profiles(*)').eq('task_id', task.id).order('created_at');
                 setComments(data || []);
             };
 
             const loadScreenshots = async () => {
-                const { data } = await supabase.from('screenshots').select('*, profiles(*)').eq('task_id', task.id).order('created_at', { ascending: false });
+                const { data } = await supabaseClient.from('screenshots').select('*, profiles(*)').eq('task_id', task.id).order('created_at', { ascending: false });
                 setScreenshots(data || []);
             };
 
             const loadHistory = async () => {
-                const { data } = await supabase.from('task_history').select('*, profiles(*)').eq('task_id', task.id).order('created_at', { ascending: false });
+                const { data } = await supabaseClient.from('task_history').select('*, profiles(*)').eq('task_id', task.id).order('created_at', { ascending: false });
                 setHistory(data || []);
             };
 
@@ -671,11 +671,11 @@
                         e.preventDefault();
                         const blob = items[i].getAsFile();
                         const fileName = `screenshot_${Date.now()}.png`;
-                        const { error } = await supabase.storage.from('media').upload(`screenshots/${fileName}`, blob);
+                        const { error } = await supabaseClient.storage.from('media').upload(`screenshots/${fileName}`, blob);
                         if (error) { console.error(error); return; }
-                        const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(`screenshots/${fileName}`);
-                        await supabase.from('screenshots').insert({ task_id: task.id, file_url: publicUrl, uploaded_by: currentUser?.id });
-                        await supabase.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'screenshot_added', details: 'Screenshot pridaný' });
+                        const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(`screenshots/${fileName}`);
+                        await supabaseClient.from('screenshots').insert({ task_id: task.id, file_url: publicUrl, uploaded_by: currentUser?.id });
+                        await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'screenshot_added', details: 'Screenshot pridaný' });
                         loadScreenshots();
                         loadHistory();
                     }
@@ -684,14 +684,14 @@
 
             const addComment = async (type = 'text', mediaUrl = null) => {
                 if (type === 'text' && !newComment.trim()) return;
-                await supabase.from('comments').insert({
+                await supabaseClient.from('comments').insert({
                     task_id: task.id, author_id: currentUser?.id,
                     text: type === 'text' ? newComment : null,
                     audio_url: type === 'audio' ? mediaUrl : null,
                     video_url: type === 'video' ? mediaUrl : null,
                     comment_type: type
                 });
-                await supabase.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'comment_added', details: type === 'text' ? `Komentár: "${newComment.substring(0, 30)}..."` : `${type} komentár` });
+                await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'comment_added', details: type === 'text' ? `Komentár: "${newComment.substring(0, 30)}..."` : `${type} komentár` });
                 setNewComment('');
                 setIsRecordingAudio(false);
                 setIsRecordingVideo(false);
@@ -700,11 +700,11 @@
             };
 
             const saveAssignees = async () => {
-                await supabase.from('task_assignees').delete().eq('task_id', task.id);
+                await supabaseClient.from('task_assignees').delete().eq('task_id', task.id);
                 if (selectedAssignees.length) {
-                    await supabase.from('task_assignees').insert(selectedAssignees.map(userId => ({ task_id: task.id, user_id: userId })));
+                    await supabaseClient.from('task_assignees').insert(selectedAssignees.map(userId => ({ task_id: task.id, user_id: userId })));
                 }
-                await supabase.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'assignee_change', details: 'Priradení zmenení' });
+                await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'assignee_change', details: 'Priradení zmenení' });
                 setEditingAssignees(false);
                 loadTasks();
                 loadHistory();
@@ -1046,14 +1046,14 @@
         // TEAM MODAL
         // =====================================================
         function TeamModal({ onClose }) {
-            const { teamMembers, currentUser, supabase } = useApp();
+            const { teamMembers, currentUser, supabaseClient } = useApp();
             const [inviteEmail, setInviteEmail] = useState('');
             const [isInviting, setIsInviting] = useState(false);
 
             const handleInvite = async () => {
                 if (!inviteEmail.trim()) return;
                 setIsInviting(true);
-                await supabase.from('invitations').insert({ email: inviteEmail, invited_by: currentUser?.id });
+                await supabaseClient.from('invitations').insert({ email: inviteEmail, invited_by: currentUser?.id });
                 alert(`Pozvánka vytvorená pre ${inviteEmail}`);
                 setInviteEmail('');
                 setIsInviting(false);
@@ -1097,13 +1097,13 @@
         // ACTIVITY LOG MODAL
         // =====================================================
         function ActivityLogModal({ onClose, onSelectTask }) {
-            const { supabase } = useApp();
+            const { supabaseClient } = useApp();
             const [activities, setActivities] = useState([]);
             const [isLoading, setIsLoading] = useState(true);
 
             useEffect(() => {
                 (async () => {
-                    const { data } = await supabase.from('activity_feed').select('*').limit(50);
+                    const { data } = await supabaseClient.from('activity_feed').select('*').limit(50);
                     setActivities(data || []);
                     setIsLoading(false);
                 })();
