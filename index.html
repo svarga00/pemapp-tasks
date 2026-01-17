@@ -26,279 +26,205 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, createContext, useContext } = React;
 
-        // =====================================================
         // SUPABASE CONFIG
-        // =====================================================
         const SUPABASE_URL = 'https://wobzkibpjxzikdmkumlf.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvYnpraWJwanh6aWtkbWt1bWxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2MTYyNTEsImV4cCI6MjA4NDE5MjI1MX0.qG-Smp-LW4BaCKMNx-NngSs9On7sdhadY5EcDhINMDA';
-
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // =====================================================
         // ICONS
-        // =====================================================
         const Icon = ({ name, className = "w-5 h-5", ...props }) => {
             const ref = useRef(null);
             useEffect(() => {
-                if (ref.current) {
+                if (ref.current && lucide.icons[name]) {
                     ref.current.innerHTML = '';
                     const icon = lucide.createElement(lucide.icons[name]);
                     icon.setAttribute('class', className);
-                    Object.keys(props).forEach(key => {
-                        if (key !== 'className') icon.setAttribute(key, props[key]);
-                    });
                     ref.current.appendChild(icon);
                 }
             }, [name, className]);
             return <span ref={ref} className="inline-flex" />;
         };
 
-        // =====================================================
         // CONTEXT
-        // =====================================================
         const AppContext = createContext(null);
         const useApp = () => useContext(AppContext);
 
-        // =====================================================
         // CONSTANTS
-        // =====================================================
         const statusConfig = { 
-            backlog: { label: 'Nezaradené', color: '#6b7280', bg: '#f3f4f6', rowBg: 'rgba(107, 114, 128, 0.03)' },
-            in_progress: { label: 'Rozpracované', color: '#e43826', bg: '#fef2f0', rowBg: 'rgba(228, 56, 38, 0.05)' }, 
-            review: { label: 'Na kontrolu', color: '#f59e0b', bg: '#fffbeb', rowBg: 'rgba(245, 158, 11, 0.05)' }, 
-            done: { label: 'Hotové', color: '#369d52', bg: '#f0f9f2', rowBg: 'rgba(54, 157, 82, 0.08)' } 
+            backlog: { label: 'Nezaradené', color: '#6b7280', bg: '#f3f4f6' },
+            in_progress: { label: 'Rozpracované', color: '#e43826', bg: '#fef2f0' }, 
+            review: { label: 'Na kontrolu', color: '#f59e0b', bg: '#fffbeb' }, 
+            done: { label: 'Hotové', color: '#369d52', bg: '#f0f9f2' } 
         };
 
         const typeConfig = { 
-            feature: { label: 'Nová funkcia', icon: 'Sparkles', color: '#369d52' }, 
+            feature: { label: 'Funkcia', icon: 'Sparkles', color: '#369d52' }, 
             fix: { label: 'Oprava', icon: 'Wrench', color: '#f59e0b' }, 
-            bug: { label: 'Chyba', icon: 'Bug', color: '#e43826' } 
+            bug: { label: 'Chyba', icon: 'Bug', color: '#e43826' },
+            idea: { label: 'Nápad', icon: 'Lightbulb', color: '#8b5cf6' }
         };
 
-        const actionLabels = {
-            created: 'Vytvorenie',
-            status_change: 'Zmena stavu',
-            assignee_change: 'Zmena priradenia',
-            priority_change: 'Zmena priority',
-            comment_added: 'Nový komentár',
-            screenshot_added: 'Screenshot pridaný',
-            edited: 'Úprava'
-        };
+        const colorOptions = ['#e43826', '#369d52', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6'];
 
-        // =====================================================
-        // USER AVATAR
-        // =====================================================
-        function UserAvatar({ user, size = 'md', showName = false }) {
-            const sizes = { sm: 'w-6 h-6 text-xs', md: 'w-8 h-8 text-sm', lg: 'w-10 h-10 text-base', xl: 'w-12 h-12 text-lg' };
+        // CONFIRM DIALOG
+        function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }) {
+            if (!isOpen) return null;
             return (
-                <div className="flex items-center gap-2">
-                    {user?.avatar_url ? (
-                        <img src={user.avatar_url} alt={user.name} className={`${sizes[size]} rounded-full object-cover`} />
-                    ) : (
-                        <div className={`${sizes[size]} rounded-full flex items-center justify-center text-white font-medium flex-shrink-0`} style={{ background: user?.color || '#999' }}>
-                            {user?.name?.charAt(0) || '?'}
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" onClick={onCancel}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 m-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                                <Icon name="AlertTriangle" className="w-6 h-6 text-red-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold">{title}</h3>
+                                <p className="text-sm text-gray-500">{message}</p>
+                            </div>
                         </div>
-                    )}
-                    {showName && <span className="font-medium text-gray-700">{user?.name}</span>}
-                </div>
-            );
-        }
-
-        // =====================================================
-        // MEDIA RECORDER HOOK
-        // =====================================================
-        function useMediaRecorder(type = 'audio') {
-            const [isRecording, setIsRecording] = useState(false);
-            const [duration, setDuration] = useState(0);
-            const [blob, setBlob] = useState(null);
-            const [error, setError] = useState(null);
-            const mediaRecorderRef = useRef(null);
-            const chunksRef = useRef([]);
-            const streamRef = useRef(null);
-            const timerRef = useRef(null);
-
-            const startRecording = async () => {
-                try {
-                    setError(null);
-                    chunksRef.current = [];
-                    const constraints = type === 'video' ? { video: true, audio: true } : { audio: true };
-                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                    streamRef.current = stream;
-                    const mimeType = type === 'video' ? 'video/webm' : 'audio/webm';
-                    const mediaRecorder = new MediaRecorder(stream, { mimeType });
-                    mediaRecorderRef.current = mediaRecorder;
-                    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-                    mediaRecorder.onstop = () => {
-                        const recordedBlob = new Blob(chunksRef.current, { type: mimeType });
-                        setBlob(recordedBlob);
-                        streamRef.current?.getTracks().forEach(track => track.stop());
-                    };
-                    mediaRecorder.start(1000);
-                    setIsRecording(true);
-                    setDuration(0);
-                    timerRef.current = setInterval(() => setDuration(prev => prev + 1), 1000);
-                } catch (err) {
-                    setError(err.message || 'Nepodarilo sa získať prístup k mikrofónu/kamere');
-                }
-            };
-
-            const stopRecording = () => {
-                if (mediaRecorderRef.current && isRecording) {
-                    mediaRecorderRef.current.stop();
-                    setIsRecording(false);
-                    clearInterval(timerRef.current);
-                }
-            };
-
-            const resetRecording = () => { setBlob(null); setDuration(0); setError(null); };
-
-            const formatDuration = (seconds) => {
-                const mins = Math.floor(seconds / 60);
-                const secs = seconds % 60;
-                return `${mins}:${secs.toString().padStart(2, '0')}`;
-            };
-
-            return { isRecording, duration, blob, error, startRecording, stopRecording, resetRecording, formatDuration, stream: streamRef.current };
-        }
-
-        // =====================================================
-        // MEDIA RECORDER COMPONENT
-        // =====================================================
-        function MediaRecorderComponent({ type = 'audio', onSave, onCancel }) {
-            const { isRecording, duration, blob, error, startRecording, stopRecording, resetRecording, formatDuration, stream } = useMediaRecorder(type);
-            const [isUploading, setIsUploading] = useState(false);
-            const videoPreviewRef = useRef(null);
-            const { currentUser } = useApp();
-
-            useEffect(() => {
-                if (type === 'video' && stream && videoPreviewRef.current) {
-                    videoPreviewRef.current.srcObject = stream;
-                }
-            }, [stream, type]);
-
-            const handleSave = async () => {
-                if (!blob) return;
-                setIsUploading(true);
-                try {
-                    const fileName = `${type}_${Date.now()}_${currentUser?.id || 'unknown'}.webm`;
-                    const filePath = `${type}s/${fileName}`;
-                    const { error: uploadError } = await supabaseClient.storage.from('media').upload(filePath, blob, { contentType: blob.type });
-                    if (uploadError) throw uploadError;
-                    const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(filePath);
-                    onSave(publicUrl);
-                    resetRecording();
-                } catch (err) {
-                    console.error('Upload error:', err);
-                    alert('Nepodarilo sa nahrať súbor');
-                } finally {
-                    setIsUploading(false);
-                }
-            };
-
-            return (
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-4">
-                    {error && <div className="text-red-500 text-sm mb-3 flex items-center gap-2"><Icon name="AlertCircle" className="w-4 h-4" />{error}</div>}
-                    {type === 'video' && isRecording && (
-                        <div className="mb-3 rounded-lg overflow-hidden bg-black">
-                            <video ref={videoPreviewRef} autoPlay muted className="w-full h-40 object-cover" />
+                        <div className="flex gap-3">
+                            <button onClick={onCancel} className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50">Zrušiť</button>
+                            <button onClick={onConfirm} className="flex-1 px-4 py-2 rounded-lg text-white bg-red-600">Zmazať</button>
                         </div>
-                    )}
-                    {blob && !isRecording && (
-                        <div className="mb-3">
-                            {type === 'audio' ? (
-                                <audio src={URL.createObjectURL(blob)} controls className="w-full" />
-                            ) : (
-                                <video src={URL.createObjectURL(blob)} controls className="w-full h-40 rounded-lg" />
-                            )}
-                        </div>
-                    )}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            {!isRecording && !blob && (
-                                <button onClick={startRecording} className="flex items-center gap-2 px-4 py-2 rounded-lg text-white font-medium" style={{ background: '#e43826' }}>
-                                    <Icon name={type === 'audio' ? 'Mic' : 'Video'} className="w-4 h-4" />
-                                    Nahrať {type === 'audio' ? 'audio' : 'video'}
-                                </button>
-                            )}
-                            {isRecording && (
-                                <>
-                                    <div className="flex items-center gap-2 text-red-500">
-                                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                                        <span className="font-mono font-medium">{formatDuration(duration)}</span>
-                                    </div>
-                                    <button onClick={stopRecording} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 text-white font-medium">
-                                        <Icon name="Square" className="w-4 h-4" />Zastaviť
-                                    </button>
-                                </>
-                            )}
-                            {blob && !isRecording && (
-                                <>
-                                    <button onClick={resetRecording} className="px-4 py-2 rounded-lg border border-gray-200 font-medium hover:bg-gray-50">Znova</button>
-                                    <button onClick={handleSave} disabled={isUploading} className="flex items-center gap-2 px-4 py-2 rounded-lg text-white font-medium" style={{ background: '#369d52' }}>
-                                        {isUploading ? <Icon name="Loader2" className="w-4 h-4 animate-spin" /> : <Icon name="Check" className="w-4 h-4" />}
-                                        {isUploading ? 'Nahrávam...' : 'Uložiť'}
-                                    </button>
-                                </>
-                            )}
-                        </div>
-                        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600"><Icon name="X" className="w-5 h-5" /></button>
                     </div>
                 </div>
             );
         }
 
-        // =====================================================
+        // USER AVATAR
+        function UserAvatar({ user, size = 'md' }) {
+            const sizes = { sm: 'w-6 h-6 text-xs', md: 'w-8 h-8 text-sm', lg: 'w-10 h-10 text-base', xl: 'w-16 h-16 text-xl' };
+            if (user?.avatar_url) {
+                return <img src={user.avatar_url} alt={user.name} className={`${sizes[size]} rounded-full object-cover`} />;
+            }
+            return (
+                <div className={`${sizes[size]} rounded-full flex items-center justify-center text-white font-medium`} style={{ background: user?.color || '#999' }}>
+                    {user?.name?.charAt(0) || '?'}
+                </div>
+            );
+        }
+
+        // PROFILE SETUP MODAL
+        function ProfileSetupModal({ user, onSave, onClose, isFirstTime }) {
+            const [form, setForm] = useState({
+                name: user?.name || '',
+                role: user?.role || 'Developer',
+                color: user?.color || '#3b82f6',
+                avatar_url: user?.avatar_url || ''
+            });
+            const [uploading, setUploading] = useState(false);
+
+            const uploadAvatar = async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploading(true);
+                const fileName = `avatar_${user.id}_${Date.now()}.${file.name.split('.').pop()}`;
+                const { error } = await supabaseClient.storage.from('media').upload(`avatars/${fileName}`, file);
+                if (!error) {
+                    const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(`avatars/${fileName}`);
+                    setForm({ ...form, avatar_url: publicUrl });
+                }
+                setUploading(false);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md m-4 overflow-hidden">
+                        <div className="p-6 border-b" style={{ background: '#f5f5f5' }}>
+                            <h2 className="text-xl font-bold">{isFirstTime ? 'Vitajte! Dokončite profil' : 'Upraviť profil'}</h2>
+                            <p className="text-sm text-gray-500 mt-1">Tieto údaje uvidia ostatní členovia tímu</p>
+                        </div>
+                        <div className="p-6">
+                            <div className="flex flex-col items-center mb-6">
+                                <div className="relative">
+                                    {form.avatar_url ? (
+                                        <img src={form.avatar_url} className="w-24 h-24 rounded-full object-cover" />
+                                    ) : (
+                                        <div className="w-24 h-24 rounded-full flex items-center justify-center text-white text-3xl font-bold" style={{ background: form.color }}>
+                                            {form.name?.charAt(0) || '?'}
+                                        </div>
+                                    )}
+                                    <label className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center cursor-pointer hover:bg-gray-50">
+                                        <input type="file" accept="image/*" onChange={uploadAvatar} className="hidden" />
+                                        {uploading ? <Icon name="Loader2" className="w-4 h-4 animate-spin" /> : <Icon name="Camera" className="w-4 h-4" />}
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Meno a priezvisko</label>
+                                    <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-red-500" placeholder="Ján Novák" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Pozícia</label>
+                                    <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-red-500">
+                                        <option>Developer</option>
+                                        <option>Designer</option>
+                                        <option>Project Manager</option>
+                                        <option>Tester</option>
+                                        <option>Admin</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Farba</label>
+                                    <div className="flex gap-2">
+                                        {colorOptions.map(c => (
+                                            <button key={c} type="button" onClick={() => setForm({ ...form, color: c })} className={`w-8 h-8 rounded-full ${form.color === c ? 'ring-2 ring-offset-2 ring-gray-400' : ''}`} style={{ background: c }} />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 mt-6">
+                                {!isFirstTime && <button onClick={onClose} className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50">Zrušiť</button>}
+                                <button onClick={() => onSave(form)} disabled={!form.name.trim()} className="flex-1 px-4 py-2 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: '#369d52' }}>
+                                    {isFirstTime ? 'Začať' : 'Uložiť'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // AUTH SCREEN
-        // =====================================================
         function AuthScreen() {
             const [email, setEmail] = useState('');
-            const [isLoading, setIsLoading] = useState(false);
-            const [isSent, setIsSent] = useState(false);
+            const [loading, setLoading] = useState(false);
+            const [sent, setSent] = useState(false);
             const [error, setError] = useState('');
 
             const handleLogin = async (e) => {
                 e.preventDefault();
-                if (!email.trim()) return;
-                setIsLoading(true);
+                setLoading(true);
                 setError('');
-                try {
-                    const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
-                    if (error) throw error;
-                    setIsSent(true);
-                } catch (err) {
-                    setError(err.message || 'Nepodarilo sa odoslať prihlasovací link');
-                } finally {
-                    setIsLoading(false);
-                }
+                const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+                if (error) setError(error.message);
+                else setSent(true);
+                setLoading(false);
             };
 
             return (
                 <div className="min-h-screen flex items-center justify-center" style={{ background: '#f5f5f5' }}>
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md m-4">
                         <div className="flex flex-col items-center mb-8">
-                            <img src="https://www.profielektromeister.sk/wp-content/uploads/2025/09/Logo-01-scaled-1-2048x2048.png" alt="PEM Logo" className="w-24 h-24 object-contain mb-4" />
-                            <h1 className="text-2xl font-bold" style={{ color: '#1d1b1b' }}>PEMApp Tasks</h1>
-                            <p className="text-gray-500 text-sm mt-1">Prihláste sa pomocou emailu</p>
+                            <img src="https://www.profielektromeister.sk/wp-content/uploads/2025/09/Logo-01-scaled-1-2048x2048.png" className="w-20 h-20 object-contain mb-4" />
+                            <h1 className="text-2xl font-bold">PEMApp Tasks</h1>
+                            <p className="text-gray-500 text-sm">Prihláste sa emailom</p>
                         </div>
-                        {isSent ? (
+                        {sent ? (
                             <div className="text-center">
                                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <Icon name="Mail" className="w-8 h-8 text-green-600" />
                                 </div>
-                                <h2 className="text-lg font-semibold mb-2">Skontrolujte email</h2>
-                                <p className="text-gray-500 text-sm mb-4">Poslali sme vám prihlasovací link na<br /><strong>{email}</strong></p>
-                                <button onClick={() => setIsSent(false)} className="text-sm text-blue-600 hover:underline">Použiť iný email</button>
+                                <p className="font-semibold mb-2">Skontrolujte email</p>
+                                <p className="text-sm text-gray-500">Poslali sme link na <strong>{email}</strong></p>
                             </div>
                         ) : (
                             <form onSubmit={handleLogin} className="space-y-4">
-                                <div className="relative">
-                                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><Icon name="Mail" className="w-5 h-5 text-gray-400" /></div>
-                                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vas@email.sk" className="w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:border-red-500 outline-none transition-colors" required />
-                                </div>
-                                {error && <p className="text-red-500 text-sm flex items-center gap-1"><Icon name="AlertCircle" className="w-4 h-4" />{error}</p>}
-                                <button type="submit" disabled={isLoading} className="w-full py-3 rounded-xl text-white font-medium transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#e43826' }}>
-                                    {isLoading && <Icon name="Loader2" className="w-5 h-5 animate-spin" />}
-                                    {isLoading ? 'Odosielam...' : 'Poslať prihlasovací link'}
+                                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vas@email.sk" className="w-full px-4 py-3 border-2 rounded-xl focus:border-red-500 outline-none" required />
+                                {error && <p className="text-red-500 text-sm">{error}</p>}
+                                <button type="submit" disabled={loading} className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#e43826' }}>
+                                    {loading && <Icon name="Loader2" className="w-5 h-5 animate-spin" />}
+                                    {loading ? 'Odosielam...' : 'Poslať link'}
                                 </button>
                             </form>
                         )}
@@ -307,51 +233,54 @@
             );
         }
 
-        // =====================================================
         // MAIN APP
-        // =====================================================
         function App() {
             const [session, setSession] = useState(null);
             const [currentUser, setCurrentUser] = useState(null);
-            const [isLoading, setIsLoading] = useState(true);
+            const [loading, setLoading] = useState(true);
+            const [showProfileSetup, setShowProfileSetup] = useState(false);
+            const [isFirstTime, setIsFirstTime] = useState(false);
             const [meetings, setMeetings] = useState([]);
             const [tasks, setTasks] = useState([]);
             const [teamMembers, setTeamMembers] = useState([]);
             const [selectedMeeting, setSelectedMeeting] = useState('all');
             const [activeTab, setActiveTab] = useState('all');
+            const [statusFilter, setStatusFilter] = useState('all');
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedTask, setSelectedTask] = useState(null);
-            const [showNewTaskModal, setShowNewTaskModal] = useState(false);
-            const [showNewMeetingModal, setShowNewMeetingModal] = useState(false);
-            const [showTeamModal, setShowTeamModal] = useState(false);
-            const [showActivityLog, setShowActivityLog] = useState(false);
+            const [showNewTask, setShowNewTask] = useState(false);
+            const [showNewMeeting, setShowNewMeeting] = useState(false);
+            const [showTeam, setShowTeam] = useState(false);
+            const [confirmDialog, setConfirmDialog] = useState({ isOpen: false });
 
             useEffect(() => {
                 supabaseClient.auth.getSession().then(({ data: { session } }) => {
                     setSession(session);
-                    if (session) loadUserProfile(session.user.id);
-                    else setIsLoading(false);
+                    if (session) loadProfile(session.user.id);
+                    else setLoading(false);
                 });
-
-                const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+                const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_e, session) => {
                     setSession(session);
-                    if (session) loadUserProfile(session.user.id);
-                    else { setCurrentUser(null); setIsLoading(false); }
+                    if (session) loadProfile(session.user.id);
+                    else { setCurrentUser(null); setLoading(false); }
                 });
-
                 return () => subscription.unsubscribe();
             }, []);
 
-            const loadUserProfile = async (userId) => {
+            const loadProfile = async (userId) => {
                 const { data } = await supabaseClient.from('profiles').select('*').eq('id', userId).single();
                 setCurrentUser(data);
-                loadAllData();
+                if (data && (!data.name || data.name.includes('@') || data.name === data.email?.split('@')[0])) {
+                    setIsFirstTime(true);
+                    setShowProfileSetup(true);
+                }
+                loadAll();
             };
 
-            const loadAllData = async () => {
-                setIsLoading(true);
-                await Promise.all([loadMeetings(), loadTasks(), loadTeamMembers()]);
-                setIsLoading(false);
+            const loadAll = async () => {
+                setLoading(true);
+                await Promise.all([loadMeetings(), loadTasks(), loadTeam()]);
+                setLoading(false);
             };
 
             const loadMeetings = async () => {
@@ -364,7 +293,7 @@
                 setTasks(data || []);
             };
 
-            const loadTeamMembers = async () => {
+            const loadTeam = async () => {
                 const { data } = await supabaseClient.from('profiles').select('*').order('name');
                 setTeamMembers(data || []);
             };
@@ -372,279 +301,246 @@
             useEffect(() => {
                 if (!session) return;
                 const channel = supabaseClient.channel('changes')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadTasks())
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignees' }, () => loadTasks())
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => loadMeetings())
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadTeamMembers())
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, loadTasks)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'task_assignees' }, loadTasks)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, loadMeetings)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, loadTeam)
                     .subscribe();
                 return () => supabaseClient.removeChannel(channel);
             }, [session]);
 
-            const handleLogout = async () => { await supabaseClient.auth.signOut(); };
+            const saveProfile = async (data) => {
+                await supabaseClient.from('profiles').update(data).eq('id', currentUser.id);
+                setCurrentUser({ ...currentUser, ...data });
+                setShowProfileSetup(false);
+                setIsFirstTime(false);
+            };
 
-            const getUserById = (id) => teamMembers.find(u => u.id === id) || { name: 'Neznámy', color: '#999' };
-
-            const filteredTasks = tasks.filter(task => {
-                const matchesMeeting = selectedMeeting === 'all' || task.meeting_id === selectedMeeting;
-                const matchesType = activeTab === 'all' || task.type === activeTab;
-                const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) || (task.description || '').toLowerCase().includes(searchQuery.toLowerCase());
-                return matchesMeeting && matchesType && matchesSearch;
+            const filteredTasks = tasks.filter(t => {
+                if (selectedMeeting !== 'all' && t.meeting_id !== selectedMeeting) return false;
+                if (activeTab !== 'all' && t.type !== activeTab) return false;
+                if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+                if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                return true;
             });
 
             const createTask = async (taskData) => {
                 const { assignees, ...task } = taskData;
-                const maxPriority = Math.max(...tasks.map(t => t.priority), 0);
-                const { data: newTask, error } = await supabaseClient.from('tasks').insert({ ...task, priority: maxPriority + 1, created_by: currentUser?.id }).select().single();
-                if (error) { console.error(error); return; }
-                if (assignees?.length) {
-                    await supabaseClient.from('task_assignees').insert(assignees.map(userId => ({ task_id: newTask.id, user_id: userId })));
+                const maxP = Math.max(...tasks.map(t => t.priority), 0);
+                const { data: newTask } = await supabaseClient.from('tasks').insert({ ...task, priority: maxP + 1, created_by: currentUser?.id }).select().single();
+                if (newTask && assignees?.length) {
+                    await supabaseClient.from('task_assignees').insert(assignees.map(uid => ({ task_id: newTask.id, user_id: uid })));
                 }
-                await supabaseClient.from('task_history').insert({ task_id: newTask.id, user_id: currentUser?.id, action: 'created', details: 'Úloha vytvorená' });
-                loadTasks();
-                setShowNewTaskModal(false);
-            };
-
-            const updateTask = async (taskId, updates, historyAction, historyDetails) => {
-                await supabaseClient.from('tasks').update(updates).eq('id', taskId);
-                if (historyAction && historyDetails) {
-                    await supabaseClient.from('task_history').insert({ task_id: taskId, user_id: currentUser?.id, action: historyAction, details: historyDetails });
+                if (newTask) {
+                    await supabaseClient.from('task_history').insert({ task_id: newTask.id, user_id: currentUser?.id, action: 'created', details: 'Úloha vytvorená' });
                 }
                 loadTasks();
+                setShowNewTask(false);
             };
 
-            const deleteTask = async (taskId) => {
-                await supabaseClient.from('tasks').delete().eq('id', taskId);
-                setSelectedTask(null);
+            const updateTask = async (id, updates, action, details) => {
+                await supabaseClient.from('tasks').update(updates).eq('id', id);
+                if (action) await supabaseClient.from('task_history').insert({ task_id: id, user_id: currentUser?.id, action, details });
                 loadTasks();
             };
 
-            const changePriority = async (taskId, direction) => {
-                const sortedTasks = [...filteredTasks].sort((a, b) => a.priority - b.priority);
-                const currentIndex = sortedTasks.findIndex(t => t.id === taskId);
-                const currentTask = sortedTasks[currentIndex];
-                if (direction === 'up' && currentIndex > 0) {
-                    const targetTask = sortedTasks[currentIndex - 1];
-                    await supabaseClient.from('tasks').update({ priority: targetTask.priority }).eq('id', currentTask.id);
-                    await supabaseClient.from('tasks').update({ priority: currentTask.priority }).eq('id', targetTask.id);
-                } else if (direction === 'down' && currentIndex < sortedTasks.length - 1) {
-                    const targetTask = sortedTasks[currentIndex + 1];
-                    await supabaseClient.from('tasks').update({ priority: targetTask.priority }).eq('id', currentTask.id);
-                    await supabaseClient.from('tasks').update({ priority: currentTask.priority }).eq('id', targetTask.id);
-                }
-                loadTasks();
+            const deleteTask = (id) => {
+                setConfirmDialog({
+                    isOpen: true,
+                    title: 'Zmazať úlohu?',
+                    message: 'Táto akcia je nevratná.',
+                    onConfirm: async () => {
+                        await supabaseClient.from('tasks').delete().eq('id', id);
+                        setSelectedTask(null);
+                        loadTasks();
+                        setConfirmDialog({ isOpen: false });
+                    },
+                    onCancel: () => setConfirmDialog({ isOpen: false })
+                });
             };
 
-            const createMeeting = async (meetingData) => {
-                await supabaseClient.from('meetings').insert({ ...meetingData, created_by: currentUser?.id });
+            const createMeeting = async (data) => {
+                await supabaseClient.from('meetings').insert({ ...data, created_by: currentUser?.id });
                 loadMeetings();
-                setShowNewMeetingModal(false);
+                setShowNewMeeting(false);
             };
 
             if (!session) return <AuthScreen />;
-            if (isLoading) return <div className="min-h-screen flex items-center justify-center" style={{ background: '#f5f5f5' }}><Icon name="Loader2" className="w-8 h-8 animate-spin text-gray-400" /></div>;
-
-            const contextValue = { currentUser, teamMembers, getUserById, supabaseClient, loadTasks };
+            if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: '#f5f5f5' }}><Icon name="Loader2" className="w-8 h-8 animate-spin text-gray-400" /></div>;
 
             return (
-                <AppContext.Provider value={contextValue}>
+                <AppContext.Provider value={{ currentUser, teamMembers, supabaseClient, loadTasks, setConfirmDialog }}>
                     <div className="min-h-screen" style={{ background: '#f5f5f5' }}>
                         {/* Header */}
-                        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-                            <div className="max-w-7xl mx-auto px-4 sm:px-6">
-                                <div className="flex items-center justify-between h-16">
-                                    <div className="flex items-center gap-4">
-                                        <img src="https://www.profielektromeister.sk/wp-content/uploads/2025/09/Logo-01-scaled-1-2048x2048.png" alt="PEM Logo" className="w-10 h-10 object-contain" />
-                                        <div>
-                                            <h1 className="text-lg font-bold" style={{ color: '#1d1b1b' }}>PEMApp Tasks</h1>
-                                            <p className="text-xs text-gray-500">Správa úloh pre vývojový tím</p>
-                                        </div>
+                        <header className="bg-white border-b sticky top-0 z-40">
+                            <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <img src="https://www.profielektromeister.sk/wp-content/uploads/2025/09/Logo-01-scaled-1-2048x2048.png" className="w-10 h-10" />
+                                    <div>
+                                        <h1 className="font-bold">PEMApp Tasks</h1>
+                                        <p className="text-xs text-gray-500">Správa úloh</p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => setShowActivityLog(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">
-                                            <Icon name="Activity" className="w-4 h-4" /><span className="hidden md:inline text-sm font-medium">Aktivita</span>
-                                        </button>
-                                        <button onClick={() => setShowTeamModal(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">
-                                            <Icon name="Users" className="w-4 h-4" /><span className="hidden md:inline text-sm font-medium">Tím</span>
-                                        </button>
-                                        <div className="flex items-center gap-2 ml-2 pl-2 border-l border-gray-200">
-                                            <UserAvatar user={currentUser} size="md" />
-                                            <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500" title="Odhlásiť sa">
-                                                <Icon name="LogOut" className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setShowTeam(true)} className="p-2 rounded-lg border hover:bg-gray-50">
+                                        <Icon name="Users" className="w-5 h-5" />
+                                    </button>
+                                    <button onClick={() => setShowProfileSetup(true)} className="flex items-center gap-2 p-1 rounded-lg hover:bg-gray-50">
+                                        <UserAvatar user={currentUser} />
+                                        <span className="hidden sm:inline text-sm font-medium">{currentUser?.name}</span>
+                                    </button>
+                                    <button onClick={() => supabaseClient.auth.signOut()} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+                                        <Icon name="LogOut" className="w-5 h-5" />
+                                    </button>
                                 </div>
                             </div>
                         </header>
 
                         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-                            {/* Meeting Selector */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+                            {/* Controls */}
+                            <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
                                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                                    <div className="flex-1">
-                                        <label className="text-sm font-medium text-gray-600 mb-2 block">Meeting / Zdroj úloh</label>
-                                        <div className="flex items-center gap-3">
-                                            <div className="relative flex-1 max-w-md">
-                                                <select value={selectedMeeting} onChange={(e) => setSelectedMeeting(e.target.value)} className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 pr-10 font-medium focus:outline-none focus:border-red-500">
-                                                    <option value="all">Všetky meetingy</option>
-                                                    {meetings.map(m => <option key={m.id} value={m.id}>{m.title} ({m.date})</option>)}
-                                                </select>
-                                                <Icon name="ChevronDown" className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                                            </div>
-                                            {selectedMeeting !== 'all' && meetings.find(m => m.id === selectedMeeting)?.video_url && (
-                                                <a href={meetings.find(m => m.id === selectedMeeting)?.video_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white font-medium hover:opacity-90" style={{ background: '#e43826' }}>
-                                                    <Icon name="Play" className="w-4 h-4" /><span className="hidden sm:inline">Video</span>
-                                                </a>
-                                            )}
-                                        </div>
+                                    <div className="flex-1 max-w-md">
+                                        <label className="text-sm font-medium text-gray-600 mb-1 block">Meeting</label>
+                                        <select value={selectedMeeting} onChange={e => setSelectedMeeting(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+                                            <option value="all">Všetky meetingy</option>
+                                            {meetings.map(m => <option key={m.id} value={m.id}>{m.title} ({m.date})</option>)}
+                                        </select>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => setShowNewMeetingModal(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 text-gray-600 font-medium">
-                                            <Icon name="Plus" className="w-4 h-4" /><span className="hidden sm:inline">Nový meeting</span>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setShowNewMeeting(true)} className="px-4 py-2 border-2 border-dashed rounded-lg text-gray-600 hover:border-gray-400">
+                                            <Icon name="Plus" className="w-4 h-4 inline mr-1" />Meeting
                                         </button>
-                                        <button onClick={() => setShowNewTaskModal(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-white font-medium hover:opacity-90 shadow-lg" style={{ background: '#369d52' }}>
-                                            <Icon name="Plus" className="w-5 h-5" />Pridať úlohu
+                                        <button onClick={() => setShowNewTask(true)} className="px-5 py-2 rounded-lg text-white font-medium shadow" style={{ background: '#369d52' }}>
+                                            <Icon name="Plus" className="w-4 h-4 inline mr-1" />Úloha
                                         </button>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Filters */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 gap-4">
-                                    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 overflow-x-auto">
+                            <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                    <div className="flex gap-1 bg-gray-100 rounded-lg p-1 overflow-x-auto">
                                         {[
-                                            { id: 'all', label: 'Všetko', count: tasks.filter(t => selectedMeeting === 'all' || t.meeting_id === selectedMeeting).length },
-                                            { id: 'feature', label: 'Funkcie', icon: 'Sparkles', count: tasks.filter(t => t.type === 'feature' && (selectedMeeting === 'all' || t.meeting_id === selectedMeeting)).length },
-                                            { id: 'fix', label: 'Opravy', icon: 'Wrench', count: tasks.filter(t => t.type === 'fix' && (selectedMeeting === 'all' || t.meeting_id === selectedMeeting)).length },
-                                            { id: 'bug', label: 'Chyby', icon: 'Bug', count: tasks.filter(t => t.type === 'bug' && (selectedMeeting === 'all' || t.meeting_id === selectedMeeting)).length }
+                                            { id: 'all', label: 'Všetko' },
+                                            { id: 'feature', label: 'Funkcie', icon: 'Sparkles' },
+                                            { id: 'fix', label: 'Opravy', icon: 'Wrench' },
+                                            { id: 'bug', label: 'Chyby', icon: 'Bug' },
+                                            { id: 'idea', label: 'Nápady', icon: 'Lightbulb' }
                                         ].map(tab => (
-                                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}>
-                                                {tab.icon && <Icon name={tab.icon} className="w-4 h-4" style={{ color: activeTab === tab.id ? typeConfig[tab.id]?.color : undefined }} />}
-                                                <span>{tab.label}</span>
-                                                <span className="text-xs bg-gray-200 px-1.5 py-0.5 rounded-full">{tab.count}</span>
+                                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap ${activeTab === tab.id ? 'bg-white shadow' : 'text-gray-600'}`}>
+                                                {tab.icon && <Icon name={tab.icon} className="w-4 h-4" />}
+                                                {tab.label}
                                             </button>
                                         ))}
                                     </div>
-                                    <div className="relative">
-                                        <Icon name="Search" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                        <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Hľadať..." className="w-full sm:w-56 pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500 text-sm" />
+                                    <div className="flex gap-2 flex-1">
+                                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 border rounded-lg text-sm">
+                                            <option value="all">Všetky stavy</option>
+                                            {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                                        </select>
+                                        <div className="relative flex-1 max-w-xs">
+                                            <Icon name="Search" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Hľadať..." className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Tasks Table */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-gray-200" style={{ background: '#f5f5f5' }}>
-                                                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase w-24">Poradie</th>
-                                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Typ</th>
-                                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase min-w-[200px]">Zadanie</th>
-                                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Stav</th>
-                                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Deadline</th>
-                                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Kto rieši</th>
+                            {/* Tasks */}
+                            <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b" style={{ background: '#f5f5f5' }}>
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase w-16">#</th>
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Typ</th>
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Úloha</th>
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Stav</th>
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Deadline</th>
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Riešiteľ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {filteredTasks.length === 0 ? (
+                                            <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-500">Žiadne úlohy</td></tr>
+                                        ) : filteredTasks.map(task => (
+                                            <tr key={task.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedTask(task)}>
+                                                <td className="px-4 py-3">
+                                                    <span className="w-7 h-7 rounded-full text-xs font-bold text-white flex items-center justify-center" style={{ background: task.priority <= 3 ? '#e43826' : task.priority <= 6 ? '#f59e0b' : '#369d52' }}>
+                                                        {task.priority}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium" style={{ background: `${typeConfig[task.type]?.color}20`, color: typeConfig[task.type]?.color }}>
+                                                        <Icon name={typeConfig[task.type]?.icon} className="w-3 h-3" />
+                                                        {typeConfig[task.type]?.label}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <p className="font-medium">{task.title}</p>
+                                                    <p className="text-sm text-gray-500 truncate max-w-xs">{task.description}</p>
+                                                </td>
+                                                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                                                    <select value={task.status} onChange={e => updateTask(task.id, { status: e.target.value }, 'status_change', `Stav zmenený na ${statusConfig[e.target.value].label}`)} className="text-sm rounded-full px-3 py-1 border-0" style={{ background: statusConfig[task.status].bg, color: statusConfig[task.status].color }}>
+                                                        {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-gray-600">
+                                                    {task.deadline ? new Date(task.deadline).toLocaleDateString('sk') : '-'}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex -space-x-2">
+                                                        {(task.assignees || []).slice(0, 3).map((a, i) => <UserAvatar key={i} user={a} size="sm" />)}
+                                                        {(task.assignees?.length || 0) > 3 && <span className="text-xs text-gray-500 ml-2">+{task.assignees.length - 3}</span>}
+                                                    </div>
+                                                </td>
                                             </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {filteredTasks.length === 0 ? (
-                                                <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-500"><Icon name="FileText" className="w-12 h-12 mx-auto mb-3 text-gray-300" /><p className="font-medium">Žiadne úlohy</p></td></tr>
-                                            ) : filteredTasks.map((task, index) => {
-                                                const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'done';
-                                                const assignees = task.assignees || [];
-                                                return (
-                                                    <tr key={task.id} className="hover:bg-gray-50/50 cursor-pointer group" style={{ background: statusConfig[task.status].rowBg }} onClick={() => setSelectedTask(task)}>
-                                                        <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                                                            <div className="flex items-center gap-1">
-                                                                <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <button onClick={() => changePriority(task.id, 'up')} disabled={index === 0} className="p-0.5 hover:bg-gray-200 rounded disabled:opacity-30"><Icon name="ArrowUp" className="w-3 h-3" /></button>
-                                                                    <button onClick={() => changePriority(task.id, 'down')} disabled={index === filteredTasks.length - 1} className="p-0.5 hover:bg-gray-200 rounded disabled:opacity-30"><Icon name="ArrowDown" className="w-3 h-3" /></button>
-                                                                </div>
-                                                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold text-white" style={{ background: task.priority <= 3 ? '#e43826' : task.priority <= 6 ? '#f59e0b' : '#369d52' }}>#{task.priority}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: `${typeConfig[task.type].color}15`, color: typeConfig[task.type].color }}>
-                                                                <Icon name={typeConfig[task.type].icon} className="w-3.5 h-3.5" />{typeConfig[task.type].label}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <p className="font-medium text-gray-900">{task.title}</p>
-                                                            <p className="text-sm text-gray-500 truncate max-w-xs">{task.description}</p>
-                                                        </td>
-                                                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                                            <select value={task.status} onChange={(e) => {
-                                                                const oldStatus = statusConfig[task.status].label;
-                                                                const newStatus = statusConfig[e.target.value].label;
-                                                                updateTask(task.id, { status: e.target.value }, 'status_change', `Stav: "${oldStatus}" → "${newStatus}"`);
-                                                            }} className="text-sm font-medium rounded-full px-3 py-1 border-0 cursor-pointer focus:outline-none" style={{ background: statusConfig[task.status].bg, color: statusConfig[task.status].color }}>
-                                                                {Object.entries(statusConfig).map(([key, val]) => <option key={key} value={key}>{val.label}</option>)}
-                                                            </select>
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <div className={`flex items-center gap-1.5 text-sm ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
-                                                                <Icon name="Calendar" className="w-4 h-4" />{task.deadline ? new Date(task.deadline).toLocaleDateString('sk-SK') : '-'}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <div className="flex items-center">
-                                                                <div className="flex -space-x-2">
-                                                                    {assignees.slice(0, 3).map((a, i) => <UserAvatar key={i} user={a} size="sm" />)}
-                                                                </div>
-                                                                {assignees.length > 3 && <span className="ml-1 text-xs text-gray-500">+{assignees.length - 3}</span>}
-                                                                {assignees.length === 1 && <span className="ml-2 text-sm font-medium text-gray-700">{assignees[0]?.name}</span>}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
 
                             {/* Stats */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
                                 {[
                                     { label: 'Celkom', value: filteredTasks.length, color: '#1d1b1b' },
-                                    { label: 'Nezaradené', value: filteredTasks.filter(t => t.status === 'backlog').length, color: '#6b7280' },
                                     { label: 'Rozpracované', value: filteredTasks.filter(t => t.status === 'in_progress').length, color: '#e43826' },
+                                    { label: 'Na kontrolu', value: filteredTasks.filter(t => t.status === 'review').length, color: '#f59e0b' },
                                     { label: 'Hotové', value: filteredTasks.filter(t => t.status === 'done').length, color: '#369d52' }
-                                ].map((stat, i) => (
-                                    <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                                        <p className="text-sm text-gray-500">{stat.label}</p>
-                                        <p className="text-3xl font-bold mt-1" style={{ color: stat.color }}>{stat.value}</p>
+                                ].map((s, i) => (
+                                    <div key={i} className="bg-white rounded-xl shadow-sm border p-4">
+                                        <p className="text-sm text-gray-500">{s.label}</p>
+                                        <p className="text-3xl font-bold" style={{ color: s.color }}>{s.value}</p>
                                     </div>
                                 ))}
                             </div>
                         </main>
 
                         {/* Modals */}
+                        {showProfileSetup && <ProfileSetupModal user={currentUser} onSave={saveProfile} onClose={() => !isFirstTime && setShowProfileSetup(false)} isFirstTime={isFirstTime} />}
                         {selectedTask && <TaskDetailModal task={selectedTask} meetings={meetings} onClose={() => setSelectedTask(null)} onUpdate={updateTask} onDelete={deleteTask} />}
-                        {showNewTaskModal && <NewTaskModal meetings={meetings} selectedMeeting={selectedMeeting} onClose={() => setShowNewTaskModal(false)} onSave={createTask} />}
-                        {showNewMeetingModal && <NewMeetingModal onClose={() => setShowNewMeetingModal(false)} onSave={createMeeting} />}
-                        {showTeamModal && <TeamModal onClose={() => setShowTeamModal(false)} />}
-                        {showActivityLog && <ActivityLogModal onClose={() => setShowActivityLog(false)} onSelectTask={(id) => { const t = tasks.find(x => x.id === id); if (t) setSelectedTask(t); setShowActivityLog(false); }} />}
+                        {showNewTask && <NewTaskModal meetings={meetings} selectedMeeting={selectedMeeting} onClose={() => setShowNewTask(false)} onSave={createTask} />}
+                        {showNewMeeting && <NewMeetingModal onClose={() => setShowNewMeeting(false)} onSave={createMeeting} />}
+                        {showTeam && <TeamModal onClose={() => setShowTeam(false)} />}
+                        <ConfirmDialog {...confirmDialog} />
                     </div>
                 </AppContext.Provider>
             );
         }
 
-        // =====================================================
         // TASK DETAIL MODAL
-        // =====================================================
         function TaskDetailModal({ task, meetings, onClose, onUpdate, onDelete }) {
-            const { currentUser, teamMembers, supabaseClient, loadTasks } = useApp();
-            const [detailTab, setDetailTab] = useState('detail');
-            const [newComment, setNewComment] = useState('');
+            const { currentUser, teamMembers, supabaseClient, loadTasks, setConfirmDialog } = useApp();
+            const [tab, setTab] = useState('detail');
+            const [editing, setEditing] = useState(false);
+            const [form, setForm] = useState({ title: task.title, description: task.description || '', type: task.type, deadline: task.deadline || '', estimate: task.estimate || 4 });
             const [comments, setComments] = useState([]);
             const [screenshots, setScreenshots] = useState([]);
             const [history, setHistory] = useState([]);
-            const [isRecordingAudio, setIsRecordingAudio] = useState(false);
-            const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+            const [newComment, setNewComment] = useState('');
+            const [assignees, setAssignees] = useState((task.assignees || []).map(a => a.id));
             const [editingAssignees, setEditingAssignees] = useState(false);
-            const [selectedAssignees, setSelectedAssignees] = useState((task.assignees || []).map(a => a.id));
 
             useEffect(() => { loadComments(); loadScreenshots(); loadHistory(); }, [task.id]);
 
@@ -663,16 +559,45 @@
                 setHistory(data || []);
             };
 
+            const saveEdit = async () => {
+                const changes = [];
+                if (form.title !== task.title) changes.push(`Názov: "${task.title}" → "${form.title}"`);
+                if (form.description !== (task.description || '')) changes.push('Popis upravený');
+                if (form.type !== task.type) changes.push(`Typ: ${typeConfig[task.type].label} → ${typeConfig[form.type].label}`);
+                await supabaseClient.from('tasks').update(form).eq('id', task.id);
+                if (changes.length) await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'edited', details: changes.join(', ') });
+                setEditing(false);
+                loadTasks();
+                loadHistory();
+            };
+
+            const saveAssignees = async () => {
+                await supabaseClient.from('task_assignees').delete().eq('task_id', task.id);
+                if (assignees.length) await supabaseClient.from('task_assignees').insert(assignees.map(uid => ({ task_id: task.id, user_id: uid })));
+                await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'assignee_change', details: 'Riešitelia zmenení' });
+                setEditingAssignees(false);
+                loadTasks();
+                loadHistory();
+            };
+
+            const addComment = async () => {
+                if (!newComment.trim()) return;
+                await supabaseClient.from('comments').insert({ task_id: task.id, author_id: currentUser?.id, text: newComment, comment_type: 'text' });
+                await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'comment_added', details: `Komentár: "${newComment.substring(0, 30)}..."` });
+                setNewComment('');
+                loadComments();
+                loadHistory();
+            };
+
             const handlePaste = async (e) => {
                 const items = e.clipboardData?.items;
                 if (!items) return;
-                for (let i = 0; i < items.length; i++) {
-                    if (items[i].type.indexOf('image') !== -1) {
+                for (let item of items) {
+                    if (item.type.includes('image')) {
                         e.preventDefault();
-                        const blob = items[i].getAsFile();
+                        const blob = item.getAsFile();
                         const fileName = `screenshot_${Date.now()}.png`;
-                        const { error } = await supabaseClient.storage.from('media').upload(`screenshots/${fileName}`, blob);
-                        if (error) { console.error(error); return; }
+                        await supabaseClient.storage.from('media').upload(`screenshots/${fileName}`, blob);
                         const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(`screenshots/${fileName}`);
                         await supabaseClient.from('screenshots').insert({ task_id: task.id, file_url: publicUrl, uploaded_by: currentUser?.id });
                         await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'screenshot_added', details: 'Screenshot pridaný' });
@@ -682,223 +607,228 @@
                 }
             };
 
-            const addComment = async (type = 'text', mediaUrl = null) => {
-                if (type === 'text' && !newComment.trim()) return;
-                await supabaseClient.from('comments').insert({
-                    task_id: task.id, author_id: currentUser?.id,
-                    text: type === 'text' ? newComment : null,
-                    audio_url: type === 'audio' ? mediaUrl : null,
-                    video_url: type === 'video' ? mediaUrl : null,
-                    comment_type: type
+            const deleteScreenshot = (id) => {
+                setConfirmDialog({
+                    isOpen: true,
+                    title: 'Zmazať screenshot?',
+                    message: 'Táto akcia je nevratná.',
+                    onConfirm: async () => {
+                        await supabaseClient.from('screenshots').delete().eq('id', id);
+                        loadScreenshots();
+                        setConfirmDialog({ isOpen: false });
+                    },
+                    onCancel: () => setConfirmDialog({ isOpen: false })
                 });
-                await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'comment_added', details: type === 'text' ? `Komentár: "${newComment.substring(0, 30)}..."` : `${type} komentár` });
-                setNewComment('');
-                setIsRecordingAudio(false);
-                setIsRecordingVideo(false);
-                loadComments();
-                loadHistory();
             };
 
-            const saveAssignees = async () => {
-                await supabaseClient.from('task_assignees').delete().eq('task_id', task.id);
-                if (selectedAssignees.length) {
-                    await supabaseClient.from('task_assignees').insert(selectedAssignees.map(userId => ({ task_id: task.id, user_id: userId })));
-                }
-                await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'assignee_change', details: 'Priradení zmenení' });
-                setEditingAssignees(false);
-                loadTasks();
-                loadHistory();
+            const deleteComment = (id) => {
+                setConfirmDialog({
+                    isOpen: true,
+                    title: 'Zmazať komentár?',
+                    message: 'Táto akcia je nevratná.',
+                    onConfirm: async () => {
+                        await supabaseClient.from('comments').delete().eq('id', id);
+                        loadComments();
+                        setConfirmDialog({ isOpen: false });
+                    },
+                    onCancel: () => setConfirmDialog({ isOpen: false })
+                });
             };
-
-            const meeting = meetings.find(m => m.id === task.meeting_id);
 
             return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()} onPaste={handlePaste}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()} onPaste={handlePaste}>
                         {/* Header */}
-                        <div className="flex items-center justify-between p-6 border-b border-gray-200" style={{ background: '#f5f5f5' }}>
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ background: task.priority <= 3 ? '#e43826' : task.priority <= 6 ? '#f59e0b' : '#369d52' }}>#{task.priority}</div>
-                                <div>
-                                    <h2 className="text-xl font-bold" style={{ color: '#1d1b1b' }}>{task.title}</h2>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: `${typeConfig[task.type].color}15`, color: typeConfig[task.type].color }}>
-                                            <Icon name={typeConfig[task.type].icon} className="w-3 h-3" />{typeConfig[task.type].label}
+                        <div className="flex items-center justify-between p-6 border-b" style={{ background: '#f5f5f5' }}>
+                            <div className="flex items-center gap-3 flex-1">
+                                <span className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ background: task.priority <= 3 ? '#e43826' : '#369d52' }}>#{task.priority}</span>
+                                <div className="flex-1">
+                                    {editing ? (
+                                        <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-xl font-bold w-full px-2 py-1 border rounded-lg" />
+                                    ) : (
+                                        <h2 className="text-xl font-bold">{task.title}</h2>
+                                    )}
+                                    <div className="flex gap-2 mt-1">
+                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: `${typeConfig[task.type]?.color}20`, color: typeConfig[task.type]?.color }}>
+                                            {typeConfig[task.type]?.label}
                                         </span>
-                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: statusConfig[task.status].bg, color: statusConfig[task.status].color }}>{statusConfig[task.status].label}</span>
+                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: statusConfig[task.status].bg, color: statusConfig[task.status].color }}>
+                                            {statusConfig[task.status].label}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
-                            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-200"><Icon name="X" className="w-5 h-5" /></button>
+                            <div className="flex gap-2">
+                                {!editing && <button onClick={() => setEditing(true)} className="p-2 rounded-lg hover:bg-gray-200"><Icon name="Edit3" className="w-5 h-5" /></button>}
+                                <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-200"><Icon name="X" className="w-5 h-5" /></button>
+                            </div>
                         </div>
 
                         {/* Tabs */}
-                        <div className="flex border-b border-gray-200">
-                            {[
-                                { id: 'detail', label: 'Detail', icon: 'FileText' },
-                                { id: 'comments', label: `Komentáre (${comments.length})`, icon: 'MessageSquare' },
-                                { id: 'screenshots', label: `Screenshoty (${screenshots.length})`, icon: 'Image' },
-                                { id: 'history', label: `História (${history.length})`, icon: 'History' }
-                            ].map(tab => (
-                                <button key={tab.id} onClick={() => setDetailTab(tab.id)} className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 ${detailTab === tab.id ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                                    <Icon name={tab.icon} className="w-4 h-4" />{tab.label}
+                        <div className="flex border-b">
+                            {['detail', 'comments', 'screenshots', 'history'].map(t => (
+                                <button key={t} onClick={() => setTab(t)} className={`px-4 py-3 text-sm font-medium border-b-2 ${tab === t ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500'}`}>
+                                    {t === 'detail' && 'Detail'}
+                                    {t === 'comments' && `Komentáre (${comments.length})`}
+                                    {t === 'screenshots' && `Screenshoty (${screenshots.length})`}
+                                    {t === 'history' && `História (${history.length})`}
                                 </button>
                             ))}
                         </div>
 
                         {/* Content */}
                         <div className="p-6 overflow-y-auto max-h-[calc(90vh-280px)]">
-                            {detailTab === 'detail' && (
+                            {tab === 'detail' && (
                                 <>
                                     <div className="mb-6">
                                         <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Popis</h3>
-                                        <p className="text-gray-700">{task.description || 'Bez popisu'}</p>
+                                        {editing ? (
+                                            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} className="w-full px-3 py-2 border rounded-lg" />
+                                        ) : (
+                                            <p className="text-gray-700">{task.description || 'Bez popisu'}</p>
+                                        )}
                                     </div>
+
+                                    {editing && (
+                                        <div className="mb-6">
+                                            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Typ</h3>
+                                            <div className="flex gap-2">
+                                                {Object.entries(typeConfig).map(([k, v]) => (
+                                                    <button key={k} onClick={() => setForm({ ...form, type: k })} className={`px-3 py-2 rounded-lg border-2 flex items-center gap-1 ${form.type === k ? 'border-current' : 'border-gray-200'}`} style={{ color: form.type === k ? v.color : '#666' }}>
+                                                        <Icon name={v.icon} className="w-4 h-4" />{v.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-2 gap-4 mb-6">
                                         <div className="bg-gray-50 rounded-lg p-4">
-                                            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1"><Icon name="Calendar" className="w-4 h-4" />Deadline</div>
-                                            <p className="font-semibold">{task.deadline ? new Date(task.deadline).toLocaleDateString('sk-SK') : '-'}</p>
-                                        </div>
-                                        <div className="bg-gray-50 rounded-lg p-4">
-                                            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1"><Icon name="Clock" className="w-4 h-4" />Odhad</div>
-                                            <p className="font-semibold">{task.estimate} hodín</p>
-                                        </div>
-                                        <div className="bg-gray-50 rounded-lg p-4">
-                                            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1"><Icon name="FileText" className="w-4 h-4" />Meeting</div>
-                                            <p className="font-semibold text-sm">{meeting?.title || '-'}</p>
-                                            {meeting?.video_url && (
-                                                <a href={meeting.video_url} target="_blank" rel="noopener noreferrer" className="text-xs text-red-600 hover:underline flex items-center gap-1 mt-1">
-                                                    <Icon name="Play" className="w-3 h-3" />Video záznam
-                                                </a>
+                                            <p className="text-sm text-gray-500 mb-1">Deadline</p>
+                                            {editing ? (
+                                                <input type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className="w-full px-2 py-1 border rounded" />
+                                            ) : (
+                                                <p className="font-semibold">{task.deadline ? new Date(task.deadline).toLocaleDateString('sk') : '-'}</p>
                                             )}
                                         </div>
                                         <div className="bg-gray-50 rounded-lg p-4">
-                                            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1"><Icon name="GripVertical" className="w-4 h-4" />Poradie</div>
-                                            <p className="font-semibold">#{task.priority}</p>
+                                            <p className="text-sm text-gray-500 mb-1">Odhad</p>
+                                            {editing ? (
+                                                <input type="number" value={form.estimate} onChange={e => setForm({ ...form, estimate: +e.target.value })} className="w-full px-2 py-1 border rounded" />
+                                            ) : (
+                                                <p className="font-semibold">{task.estimate}h</p>
+                                            )}
                                         </div>
                                     </div>
-                                    {task.video_url && (
-                                        <div className="mb-6">
-                                            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Video k úlohe</h3>
-                                            <a href={task.video_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
-                                                <Icon name="Video" className="w-5 h-5" />Otvoriť video
-                                            </a>
+
+                                    {editing && (
+                                        <div className="flex gap-2 mb-6">
+                                            <button onClick={() => setEditing(false)} className="flex-1 px-4 py-2 border rounded-lg">Zrušiť</button>
+                                            <button onClick={saveEdit} className="flex-1 px-4 py-2 rounded-lg text-white" style={{ background: '#369d52' }}>Uložiť</button>
                                         </div>
                                     )}
-                                    {task.audio_url && (
-                                        <div className="mb-6">
-                                            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Audio popis</h3>
-                                            <audio src={task.audio_url} controls className="w-full" />
-                                        </div>
-                                    )}
-                                    <div className="mb-6">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <h3 className="text-sm font-semibold text-gray-500 uppercase">Kto rieši ({(task.assignees || []).length})</h3>
-                                            <button onClick={() => { setEditingAssignees(true); setSelectedAssignees((task.assignees || []).map(a => a.id)); }} className="text-sm text-blue-600 hover:text-blue-700 font-medium">Upraviť</button>
+
+                                    <div>
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h3 className="text-sm font-semibold text-gray-500 uppercase">Riešitelia ({(task.assignees || []).length})</h3>
+                                            <button onClick={() => { setEditingAssignees(true); setAssignees((task.assignees || []).map(a => a.id)); }} className="text-sm text-blue-600">Upraviť</button>
                                         </div>
                                         {editingAssignees ? (
-                                            <div className="border border-gray-200 rounded-lg p-4">
+                                            <div className="border rounded-lg p-4">
                                                 <div className="grid grid-cols-2 gap-2 mb-4 max-h-40 overflow-y-auto">
-                                                    {teamMembers.map(member => (
-                                                        <label key={member.id} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${selectedAssignees.includes(member.id) ? 'bg-green-50 border border-green-200' : 'hover:bg-gray-50 border border-transparent'}`}>
-                                                            <input type="checkbox" checked={selectedAssignees.includes(member.id)} onChange={() => setSelectedAssignees(prev => prev.includes(member.id) ? prev.filter(id => id !== member.id) : [...prev, member.id])} className="sr-only" />
-                                                            <UserAvatar user={member} size="sm" />
-                                                            <span className="text-sm font-medium truncate">{member.name}</span>
-                                                            {selectedAssignees.includes(member.id) && <Icon name="Check" className="w-5 h-5 text-green-600" />}
+                                                    {teamMembers.map(m => (
+                                                        <label key={m.id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${assignees.includes(m.id) ? 'bg-green-50 border border-green-200' : 'hover:bg-gray-50'}`}>
+                                                            <input type="checkbox" checked={assignees.includes(m.id)} onChange={() => setAssignees(a => a.includes(m.id) ? a.filter(x => x !== m.id) : [...a, m.id])} className="hidden" />
+                                                            <UserAvatar user={m} size="sm" />
+                                                            <span className="text-sm">{m.name}</span>
+                                                            {assignees.includes(m.id) && <Icon name="Check" className="w-4 h-4 text-green-600 ml-auto" />}
                                                         </label>
                                                     ))}
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => setEditingAssignees(false)} className="flex-1 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium">Zrušiť</button>
-                                                    <button onClick={saveAssignees} className="flex-1 px-3 py-2 rounded-lg text-white text-sm font-medium" style={{ background: '#369d52' }}>Uložiť</button>
+                                                    <button onClick={() => setEditingAssignees(false)} className="flex-1 px-3 py-2 border rounded-lg">Zrušiť</button>
+                                                    <button onClick={saveAssignees} className="flex-1 px-3 py-2 rounded-lg text-white" style={{ background: '#369d52' }}>Uložiť</button>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="flex flex-wrap gap-2">
                                                 {(task.assignees || []).map(a => (
-                                                    <div key={a.id} className="flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5">
+                                                    <div key={a.id} className="flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1">
                                                         <UserAvatar user={a} size="sm" />
-                                                        <span className="text-sm font-medium">{a.name}</span>
+                                                        <span className="text-sm">{a.name}</span>
                                                     </div>
                                                 ))}
-                                                {(task.assignees || []).length === 0 && <p className="text-gray-400 text-sm">Nikto nepriradený</p>}
                                             </div>
                                         )}
                                     </div>
                                 </>
                             )}
 
-                            {detailTab === 'comments' && (
+                            {tab === 'comments' && (
                                 <div>
-                                    {isRecordingAudio && <div className="mb-4"><MediaRecorderComponent type="audio" onSave={(url) => addComment('audio', url)} onCancel={() => setIsRecordingAudio(false)} /></div>}
-                                    {isRecordingVideo && <div className="mb-4"><MediaRecorderComponent type="video" onSave={(url) => addComment('video', url)} onCancel={() => setIsRecordingVideo(false)} /></div>}
-                                    {!isRecordingAudio && !isRecordingVideo && (
-                                        <div className="mb-6">
-                                            <div className="flex gap-2 mb-2">
-                                                <input type="text" value={newComment} onChange={(e) => setNewComment(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addComment('text')} placeholder="Napíšte komentár..." className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500 text-sm" />
-                                                <button onClick={() => addComment('text')} className="px-4 py-2 rounded-lg text-white" style={{ background: '#369d52' }}><Icon name="Send" className="w-5 h-5" /></button>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => setIsRecordingAudio(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 text-sm hover:bg-gray-50">
-                                                    <Icon name="Mic" className="w-4 h-4" />Audio
-                                                </button>
-                                                <button onClick={() => setIsRecordingVideo(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 text-sm hover:bg-gray-50">
-                                                    <Icon name="Video" className="w-4 h-4" />Video
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <div className="flex gap-2 mb-4">
+                                        <input value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && addComment()} placeholder="Napíšte komentár..." className="flex-1 px-4 py-2 border rounded-lg" />
+                                        <button onClick={addComment} className="px-4 py-2 rounded-lg text-white" style={{ background: '#369d52' }}>
+                                            <Icon name="Send" className="w-5 h-5" />
+                                        </button>
+                                    </div>
                                     <div className="space-y-3">
-                                        {comments.length === 0 ? <p className="text-gray-400 text-sm py-8 text-center">Zatiaľ žiadne komentáre</p> : comments.map(comment => (
-                                            <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <UserAvatar user={comment.profiles} size="sm" />
-                                                    <span className="font-medium text-sm">{comment.profiles?.name}</span>
-                                                    <span className="text-xs text-gray-400">{new Date(comment.created_at).toLocaleString('sk-SK')}</span>
+                                        {comments.map(c => (
+                                            <div key={c.id} className="bg-gray-50 rounded-lg p-3 group">
+                                                <div className="flex justify-between">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <UserAvatar user={c.profiles} size="sm" />
+                                                        <span className="font-medium text-sm">{c.profiles?.name}</span>
+                                                        <span className="text-xs text-gray-400">{new Date(c.created_at).toLocaleString('sk')}</span>
+                                                    </div>
+                                                    {c.author_id === currentUser?.id && (
+                                                        <button onClick={() => deleteComment(c.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded">
+                                                            <Icon name="Trash2" className="w-4 h-4 text-red-500" />
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                {comment.comment_type === 'text' && <p className="text-sm text-gray-700 ml-8">{comment.text}</p>}
-                                                {comment.comment_type === 'audio' && <audio src={comment.audio_url} controls className="w-full ml-8" />}
-                                                {comment.comment_type === 'video' && <video src={comment.video_url} controls className="w-full h-40 rounded-lg ml-8" />}
+                                                <p className="text-sm ml-8">{c.text}</p>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             )}
 
-                            {detailTab === 'screenshots' && (
+                            {tab === 'screenshots' && (
                                 <div>
-                                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center mb-6 hover:border-gray-400">
+                                    <div className="border-2 border-dashed rounded-xl p-8 text-center mb-6">
                                         <Icon name="Clipboard" className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                                        <p className="font-medium text-gray-600">Vložte screenshot (Ctrl+V)</p>
+                                        <p className="text-gray-600">Vložte screenshot (Ctrl+V)</p>
                                     </div>
-                                    {screenshots.length === 0 ? <p className="text-gray-400 text-sm py-8 text-center">Zatiaľ žiadne screenshoty</p> : (
-                                        <div className="grid grid-cols-2 gap-4">
-                                            {screenshots.map(s => (
-                                                <div key={s.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                                                    <img src={s.file_url} alt="Screenshot" className="w-full h-40 object-cover cursor-pointer hover:opacity-90" onClick={() => window.open(s.file_url, '_blank')} />
-                                                    <div className="p-2 bg-gray-50 flex items-center gap-2">
-                                                        <UserAvatar user={s.profiles} size="sm" />
-                                                        <span className="text-xs text-gray-500">{new Date(s.created_at).toLocaleString('sk-SK')}</span>
-                                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {screenshots.map(s => (
+                                            <div key={s.id} className="border rounded-lg overflow-hidden group relative">
+                                                <img src={s.file_url} className="w-full h-40 object-cover cursor-pointer" onClick={() => window.open(s.file_url)} />
+                                                <button onClick={() => deleteScreenshot(s.id)} className="absolute top-2 right-2 p-2 bg-white rounded-lg opacity-0 group-hover:opacity-100">
+                                                    <Icon name="Trash2" className="w-4 h-4 text-red-500" />
+                                                </button>
+                                                <div className="p-2 bg-gray-50 flex items-center gap-2">
+                                                    <UserAvatar user={s.profiles} size="sm" />
+                                                    <span className="text-xs text-gray-500">{new Date(s.created_at).toLocaleString('sk')}</span>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 
-                            {detailTab === 'history' && (
+                            {tab === 'history' && (
                                 <div className="space-y-3">
-                                    {history.length === 0 ? <p className="text-gray-400 text-sm py-8 text-center">Žiadna história</p> : history.map(entry => (
-                                        <div key={entry.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                                            <UserAvatar user={entry.profiles} size="md" />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="font-medium text-sm">{entry.profiles?.name}</span>
-                                                    <span className="text-xs px-2 py-0.5 bg-gray-200 rounded-full">{actionLabels[entry.action] || entry.action}</span>
+                                    {history.map(h => (
+                                        <div key={h.id} className="flex gap-3 p-3 bg-gray-50 rounded-lg">
+                                            <UserAvatar user={h.profiles} />
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-sm">{h.profiles?.name}</span>
+                                                    <span className="text-xs px-2 py-0.5 bg-gray-200 rounded-full">{h.action}</span>
                                                 </div>
-                                                <p className="text-sm text-gray-600 mt-1">{entry.details}</p>
-                                                <p className="text-xs text-gray-400 mt-1">{new Date(entry.created_at).toLocaleString('sk-SK')}</p>
+                                                <p className="text-sm text-gray-600 mt-1">{h.details}</p>
+                                                <p className="text-xs text-gray-400 mt-1">{new Date(h.created_at).toLocaleString('sk')}</p>
                                             </div>
                                         </div>
                                     ))}
@@ -907,243 +837,162 @@
                         </div>
 
                         {/* Footer */}
-                        <div className="flex items-center justify-between p-4 border-t border-gray-200 bg-gray-50">
-                            <button onClick={() => onDelete(task.id)} className="flex items-center gap-2 px-4 py-2 rounded-lg text-red-600 hover:bg-red-50"><Icon name="Trash2" className="w-4 h-4" />Zmazať</button>
-                            <button onClick={onClose} className="px-6 py-2 rounded-lg text-white font-medium" style={{ background: '#1d1b1b' }}>Zavrieť</button>
+                        <div className="flex justify-between p-4 border-t bg-gray-50">
+                            <button onClick={() => onDelete(task.id)} className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2">
+                                <Icon name="Trash2" className="w-4 h-4" />Zmazať
+                            </button>
+                            <button onClick={onClose} className="px-6 py-2 rounded-lg text-white" style={{ background: '#1d1b1b' }}>Zavrieť</button>
                         </div>
                     </div>
                 </div>
             );
         }
 
-        // =====================================================
         // NEW TASK MODAL
-        // =====================================================
         function NewTaskModal({ meetings, selectedMeeting, onClose, onSave }) {
-            const { teamMembers, currentUser } = useApp();
+            const { teamMembers } = useApp();
             const [form, setForm] = useState({
-                meeting_id: selectedMeeting !== 'all' ? selectedMeeting : meetings[0]?.id || null,
-                type: 'feature', title: '', description: '', audio_url: '', video_url: '',
-                deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                status: 'backlog', estimate: 4, assignees: teamMembers[0] ? [teamMembers[0].id] : []
+                meeting_id: selectedMeeting !== 'all' ? selectedMeeting : null,
+                type: 'feature', title: '', description: '',
+                deadline: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+                estimate: 4, assignees: []
             });
-            const [isRecordingAudio, setIsRecordingAudio] = useState(false);
-            const [isRecordingVideo, setIsRecordingVideo] = useState(false);
-
-            const handleSubmit = (e) => { e.preventDefault(); if (!form.title.trim() || form.assignees.length === 0) return; onSave(form); };
 
             return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                            <h2 className="text-xl font-bold" style={{ color: '#1d1b1b' }}>Nová úloha</h2>
-                            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100"><Icon name="X" className="w-5 h-5" /></button>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between p-6 border-b">
+                            <h2 className="text-xl font-bold">Nová úloha</h2>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><Icon name="X" className="w-5 h-5" /></button>
                         </div>
-                        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-160px)]">
+                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)]">
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Meeting</label>
-                                    <select value={form.meeting_id || ''} onChange={(e) => setForm({ ...form, meeting_id: e.target.value || null })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500">
+                                    <label className="block text-sm font-medium mb-1">Meeting</label>
+                                    <select value={form.meeting_id || ''} onChange={e => setForm({ ...form, meeting_id: e.target.value || null })} className="w-full px-4 py-2 border rounded-lg">
                                         <option value="">Bez meetingu</option>
                                         {meetings.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Typ úlohy</label>
+                                    <label className="block text-sm font-medium mb-1">Typ</label>
                                     <div className="flex gap-2">
-                                        {Object.entries(typeConfig).map(([key, config]) => (
-                                            <button key={key} type="button" onClick={() => setForm({ ...form, type: key })} className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 ${form.type === key ? 'border-current' : 'border-gray-200'}`} style={{ color: form.type === key ? config.color : '#6b7280' }}>
-                                                <Icon name={config.icon} className="w-4 h-4" />{config.label}
+                                        {Object.entries(typeConfig).map(([k, v]) => (
+                                            <button key={k} type="button" onClick={() => setForm({ ...form, type: k })} className={`flex-1 px-3 py-2 rounded-lg border-2 flex items-center justify-center gap-1 ${form.type === k ? 'border-current' : 'border-gray-200'}`} style={{ color: form.type === k ? v.color : '#666' }}>
+                                                <Icon name={v.icon} className="w-4 h-4" />{v.label}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Názov úlohy</label>
-                                    <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Napr. Implementovať dashboard" className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500" required />
+                                    <label className="block text-sm font-medium mb-1">Názov</label>
+                                    <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full px-4 py-2 border rounded-lg" placeholder="Názov úlohy" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Popis</label>
-                                    <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Detailný popis..." rows={3} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500 resize-none" />
+                                    <label className="block text-sm font-medium mb-1">Popis</label>
+                                    <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full px-4 py-2 border rounded-lg" placeholder="Popis..." />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Kto rieši</label>
-                                    <div className="grid grid-cols-2 gap-2 p-3 border border-gray-200 rounded-lg max-h-40 overflow-y-auto">
-                                        {teamMembers.map(member => (
-                                            <label key={member.id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${form.assignees.includes(member.id) ? 'bg-green-50 border border-green-200' : 'hover:bg-gray-50 border border-transparent'}`}>
-                                                <input type="checkbox" checked={form.assignees.includes(member.id)} onChange={() => setForm(f => ({ ...f, assignees: f.assignees.includes(member.id) ? f.assignees.filter(id => id !== member.id) : [...f.assignees, member.id] }))} className="sr-only" />
-                                                <UserAvatar user={member} size="sm" />
-                                                <span className="text-sm font-medium truncate">{member.name}</span>
-                                                {form.assignees.includes(member.id) && <Icon name="Check" className="w-4 h-4 text-green-600 ml-auto" />}
+                                    <label className="block text-sm font-medium mb-2">Riešitelia</label>
+                                    <div className="grid grid-cols-2 gap-2 border rounded-lg p-3 max-h-40 overflow-y-auto">
+                                        {teamMembers.map(m => (
+                                            <label key={m.id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${form.assignees.includes(m.id) ? 'bg-green-50' : 'hover:bg-gray-50'}`}>
+                                                <input type="checkbox" checked={form.assignees.includes(m.id)} onChange={() => setForm(f => ({ ...f, assignees: f.assignees.includes(m.id) ? f.assignees.filter(x => x !== m.id) : [...f.assignees, m.id] }))} className="hidden" />
+                                                <UserAvatar user={m} size="sm" />
+                                                <span className="text-sm">{m.name}</span>
                                             </label>
                                         ))}
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Audio popis</label>
-                                    {isRecordingAudio ? <MediaRecorderComponent type="audio" onSave={(url) => { setForm({ ...form, audio_url: url }); setIsRecordingAudio(false); }} onCancel={() => setIsRecordingAudio(false)} />
-                                    : form.audio_url ? <div className="flex items-center gap-2"><audio src={form.audio_url} controls className="flex-1" /><button type="button" onClick={() => setForm({ ...form, audio_url: '' })} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Icon name="X" className="w-4 h-4" /></button></div>
-                                    : <button type="button" onClick={() => setIsRecordingAudio(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><Icon name="Mic" className="w-4 h-4" />Nahrať audio</button>}
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Video popis</label>
-                                    {isRecordingVideo ? <MediaRecorderComponent type="video" onSave={(url) => { setForm({ ...form, video_url: url }); setIsRecordingVideo(false); }} onCancel={() => setIsRecordingVideo(false)} />
-                                    : form.video_url ? <div className="flex items-center gap-2"><video src={form.video_url} controls className="flex-1 h-32 rounded-lg" /><button type="button" onClick={() => setForm({ ...form, video_url: '' })} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Icon name="X" className="w-4 h-4" /></button></div>
-                                    : <button type="button" onClick={() => setIsRecordingVideo(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><Icon name="Video" className="w-4 h-4" />Nahrať video</button>}
-                                </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Odhad (hodín)</label>
-                                        <input type="number" value={form.estimate} onChange={(e) => setForm({ ...form, estimate: parseInt(e.target.value) || 1 })} min={1} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500" />
+                                        <label className="block text-sm font-medium mb-1">Odhad (h)</label>
+                                        <input type="number" value={form.estimate} onChange={e => setForm({ ...form, estimate: +e.target.value })} className="w-full px-4 py-2 border rounded-lg" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
-                                        <input type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500" />
+                                        <label className="block text-sm font-medium mb-1">Deadline</label>
+                                        <input type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className="w-full px-4 py-2 border rounded-lg" />
                                     </div>
                                 </div>
                             </div>
                             <div className="flex gap-3 mt-6">
-                                <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg font-medium hover:bg-gray-50">Zrušiť</button>
-                                <button type="submit" disabled={form.assignees.length === 0} className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: '#369d52' }}>Vytvoriť</button>
+                                <button onClick={onClose} className="flex-1 px-4 py-2 border rounded-lg">Zrušiť</button>
+                                <button onClick={() => onSave(form)} disabled={!form.title.trim()} className="flex-1 px-4 py-2 rounded-lg text-white disabled:opacity-50" style={{ background: '#369d52' }}>Vytvoriť</button>
                             </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
             );
         }
 
-        // =====================================================
         // NEW MEETING MODAL
-        // =====================================================
         function NewMeetingModal({ onClose, onSave }) {
             const [form, setForm] = useState({ title: '', date: new Date().toISOString().split('T')[0], video_url: '', description: '' });
-            const handleSubmit = (e) => { e.preventDefault(); if (!form.title.trim()) return; onSave(form); };
             return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                            <h2 className="text-xl font-bold" style={{ color: '#1d1b1b' }}>Nový meeting</h2>
-                            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100"><Icon name="X" className="w-5 h-5" /></button>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between p-6 border-b">
+                            <h2 className="text-xl font-bold">Nový meeting</h2>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><Icon name="X" className="w-5 h-5" /></button>
                         </div>
-                        <form onSubmit={handleSubmit} className="p-6">
-                            <div className="space-y-4">
-                                <div><label className="block text-sm font-medium text-gray-700 mb-1">Názov</label><input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Sprint Planning" className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500" required /></div>
-                                <div><label className="block text-sm font-medium text-gray-700 mb-1">Dátum</label><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500" /></div>
-                                <div><label className="block text-sm font-medium text-gray-700 mb-1">Video URL</label><input type="url" value={form.video_url} onChange={(e) => setForm({ ...form, video_url: e.target.value })} placeholder="https://..." className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500" /></div>
-                                <div><label className="block text-sm font-medium text-gray-700 mb-1">Popis</label><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500 resize-none" /></div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Názov</label>
+                                <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full px-4 py-2 border rounded-lg" />
                             </div>
-                            <div className="flex gap-3 mt-6">
-                                <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg font-medium hover:bg-gray-50">Zrušiť</button>
-                                <button type="submit" className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium" style={{ background: '#369d52' }}>Vytvoriť</button>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Dátum</label>
+                                <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="w-full px-4 py-2 border rounded-lg" />
                             </div>
-                        </form>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Video URL</label>
+                                <input value={form.video_url} onChange={e => setForm({ ...form, video_url: e.target.value })} className="w-full px-4 py-2 border rounded-lg" placeholder="https://..." />
+                            </div>
+                            <div className="flex gap-3">
+                                <button onClick={onClose} className="flex-1 px-4 py-2 border rounded-lg">Zrušiť</button>
+                                <button onClick={() => onSave(form)} disabled={!form.title.trim()} className="flex-1 px-4 py-2 rounded-lg text-white disabled:opacity-50" style={{ background: '#369d52' }}>Vytvoriť</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             );
         }
 
-        // =====================================================
         // TEAM MODAL
-        // =====================================================
         function TeamModal({ onClose }) {
-            const { teamMembers, currentUser, supabaseClient } = useApp();
-            const [inviteEmail, setInviteEmail] = useState('');
-            const [isInviting, setIsInviting] = useState(false);
-
-            const handleInvite = async () => {
-                if (!inviteEmail.trim()) return;
-                setIsInviting(true);
-                await supabaseClient.from('invitations').insert({ email: inviteEmail, invited_by: currentUser?.id });
-                alert(`Pozvánka vytvorená pre ${inviteEmail}`);
-                setInviteEmail('');
-                setIsInviting(false);
-            };
-
+            const { teamMembers, currentUser } = useApp();
             return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-6 border-b border-gray-200" style={{ background: '#f5f5f5' }}>
-                            <div><h2 className="text-xl font-bold" style={{ color: '#1d1b1b' }}>Tím</h2><p className="text-sm text-gray-500 mt-1">{teamMembers.length} členov</p></div>
-                            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-200"><Icon name="X" className="w-5 h-5" /></button>
-                        </div>
-                        <div className="p-6 overflow-y-auto max-h-[calc(85vh-180px)]">
-                            <div className="mb-6 p-4 border border-dashed border-gray-300 rounded-lg">
-                                <h3 className="text-sm font-semibold mb-3">Pozvať nového člena</h3>
-                                <div className="flex gap-2">
-                                    <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="email@priklad.sk" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-red-500 text-sm" />
-                                    <button onClick={handleInvite} disabled={isInviting} className="px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50" style={{ background: '#369d52' }}>
-                                        {isInviting ? <Icon name="Loader2" className="w-4 h-4 animate-spin" /> : 'Pozvať'}
-                                    </button>
-                                </div>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between p-6 border-b" style={{ background: '#f5f5f5' }}>
+                            <div>
+                                <h2 className="text-xl font-bold">Tím</h2>
+                                <p className="text-sm text-gray-500">{teamMembers.length} členov</p>
                             </div>
-                            <div className="space-y-3">
-                                {teamMembers.map(member => (
-                                    <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                        <div className="flex items-center gap-3">
-                                            <UserAvatar user={member} size="lg" />
-                                            <div><p className="font-medium">{member.name}</p><p className="text-sm text-gray-500">{member.email}</p><p className="text-xs text-gray-400">{member.role}</p></div>
-                                        </div>
-                                        {member.id === currentUser?.id && <span className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded-full">Ty</span>}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        // =====================================================
-        // ACTIVITY LOG MODAL
-        // =====================================================
-        function ActivityLogModal({ onClose, onSelectTask }) {
-            const { supabaseClient } = useApp();
-            const [activities, setActivities] = useState([]);
-            const [isLoading, setIsLoading] = useState(true);
-
-            useEffect(() => {
-                (async () => {
-                    const { data } = await supabaseClient.from('activity_feed').select('*').limit(50);
-                    setActivities(data || []);
-                    setIsLoading(false);
-                })();
-            }, []);
-
-            return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-6 border-b border-gray-200" style={{ background: '#f5f5f5' }}>
-                            <div><h2 className="text-xl font-bold" style={{ color: '#1d1b1b' }}>Log aktivity</h2><p className="text-sm text-gray-500 mt-1">Všetky zmeny</p></div>
-                            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-200"><Icon name="X" className="w-5 h-5" /></button>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg"><Icon name="X" className="w-5 h-5" /></button>
                         </div>
                         <div className="p-6 overflow-y-auto max-h-[calc(80vh-100px)]">
-                            {isLoading ? <div className="flex justify-center py-12"><Icon name="Loader2" className="w-8 h-8 animate-spin text-gray-400" /></div>
-                            : activities.length === 0 ? <div className="text-center py-12 text-gray-500"><Icon name="Activity" className="w-12 h-12 mx-auto mb-3 text-gray-300" /><p className="font-medium">Žiadna aktivita</p></div>
-                            : <div className="space-y-3">
-                                {activities.map(a => (
-                                    <div key={a.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer" onClick={() => onSelectTask(a.task_id)}>
-                                        <UserAvatar user={{ name: a.user_name, color: a.user_color, avatar_url: a.user_avatar }} size="md" />
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="font-medium text-sm">{a.user_name}</span>
-                                                <span className="text-xs px-2 py-0.5 bg-gray-200 rounded-full">{actionLabels[a.action] || a.action}</span>
-                                                <span className="text-xs font-medium text-blue-600 truncate">{a.task_title}</span>
+                            <div className="space-y-3">
+                                {teamMembers.map(m => (
+                                    <div key={m.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <UserAvatar user={m} size="lg" />
+                                            <div>
+                                                <p className="font-medium">{m.name}</p>
+                                                <p className="text-sm text-gray-500">{m.email}</p>
+                                                <p className="text-xs text-gray-400">{m.role}</p>
                                             </div>
-                                            <p className="text-sm text-gray-600 mt-1 truncate">{a.details}</p>
-                                            <p className="text-xs text-gray-400 mt-1">{new Date(a.created_at).toLocaleString('sk-SK')}</p>
                                         </div>
+                                        {m.id === currentUser?.id && <span className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded-full">Ty</span>}
                                     </div>
                                 ))}
-                            </div>}
+                            </div>
                         </div>
                     </div>
                 </div>
             );
         }
 
-        // =====================================================
-        // RENDER
-        // =====================================================
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
