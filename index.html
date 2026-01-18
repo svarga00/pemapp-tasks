@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PEMApp Tasks</title>
     <link rel="icon" href="https://www.profielektromeister.sk/wp-content/uploads/2025/09/Logo-01-scaled-1-2048x2048.png" type="image/png">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -13,7 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
-        * { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        * { font-family: 'Rubik', sans-serif; -webkit-tap-highlight-color: transparent; }
         :root { --primary: #e43826; --primary-dark: #c92d1c; --success: #10b981; --warning: #f59e0b; --dark: #0f172a; }
         body { background: #f8fafc; min-height: 100vh; }
         
@@ -40,24 +40,16 @@
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* Modern table styles */
         .task-table { border-collapse: separate; border-spacing: 0; }
         .task-table thead th { 
             position: sticky; top: 0; background: #f8fafc; 
             font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
             color: #64748b; padding: 12px 16px; border-bottom: 2px solid #e2e8f0;
         }
-        .task-table tbody tr { 
-            transition: all 0.15s ease; cursor: pointer;
-        }
-        .task-table tbody tr:hover { 
-            background: #f1f5f9 !important;
-        }
-        .task-table tbody td { 
-            padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;
-        }
+        .task-table tbody tr { transition: all 0.15s ease; cursor: pointer; }
+        .task-table tbody tr:hover { background: #f1f5f9 !important; }
+        .task-table tbody td { padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
         
-        /* Mobile card styles */
         .task-card { 
             background: white; border-radius: 16px; padding: 16px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;
@@ -65,21 +57,22 @@
         }
         .task-card:active { transform: scale(0.98); }
         
-        /* Drag styles */
         .dragging { opacity: 0.5; }
         .drag-over { background: rgba(228,56,38,0.05) !important; border: 2px dashed var(--primary) !important; }
         
-        /* Input focus */
         input:focus, textarea:focus, select:focus { 
             outline: none; border-color: var(--primary); 
             box-shadow: 0 0 0 3px rgba(228,56,38,0.1); 
         }
         
-        /* Status row backgrounds */
         .status-backlog { background: #fafafa; }
         .status-in_progress { background: #fef7f6; }
         .status-review { background: #fffcf5; }
         .status-done { background: #f6fef9; }
+        
+        .priority-badge {
+            background: var(--primary) !important;
+        }
     </style>
 </head>
 <body>
@@ -88,12 +81,10 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, createContext, useContext, useMemo } = React;
 
-        // SUPABASE CONFIG
         const SUPABASE_URL = 'https://wobzkibpjxzikdmkumlf.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvYnpraWJwanh6aWtkbWt1bWxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2MTYyNTEsImV4cCI6MjA4NDE5MjI1MX0.qG-Smp-LW4BaCKMNx-NngSs9On7sdhadY5EcDhINMDA';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // ICONS
         const Icon = ({ name, className = "w-5 h-5" }) => {
             const ref = useRef(null);
             useEffect(() => {
@@ -107,11 +98,9 @@
             return <span ref={ref} className="inline-flex items-center justify-center" />;
         };
 
-        // CONTEXT
         const AppContext = createContext(null);
         const useApp = () => useContext(AppContext);
 
-        // CONSTANTS
         const statusConfig = { 
             backlog: { label: 'Nezaradené', color: '#64748b', bg: '#f1f5f9', icon: 'Circle' },
             in_progress: { label: 'Rozpracované', color: '#e43826', bg: '#fef2f2', icon: 'PlayCircle' }, 
@@ -126,6 +115,12 @@
             idea: { label: 'Nápad', icon: 'Lightbulb', color: '#8b5cf6', bg: '#f5f3ff' }
         };
 
+        const meetingStatusConfig = {
+            planned: { label: 'Plánovaný', color: '#3b82f6', bg: '#eff6ff' },
+            in_progress: { label: 'Prebieha', color: '#f59e0b', bg: '#fffbeb' },
+            completed: { label: 'Dokončený', color: '#10b981', bg: '#ecfdf5' }
+        };
+
         const colorOptions = ['#e43826', '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6', '#0f172a'];
         
         const formatRelativeTime = (date) => {
@@ -137,14 +132,12 @@
             return d.toLocaleDateString('sk');
         };
 
-        // USER AVATAR
         function UserAvatar({ user, size = 'md' }) {
             const sizes = { xs: 'w-6 h-6 text-[10px]', sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-12 h-12 text-base', xl: 'w-16 h-16 text-xl' };
             if (user?.avatar_url) return <img src={user.avatar_url} alt={user.name} className={`${sizes[size]} rounded-full object-cover ring-2 ring-white`} />;
             return <div className={`${sizes[size]} rounded-full flex items-center justify-center text-white font-semibold ring-2 ring-white shadow-sm`} style={{ background: user?.color || '#64748b' }}>{user?.name?.charAt(0)?.toUpperCase() || '?'}</div>;
         }
 
-        // AUDIO RECORDER
         function AudioRecorder({ onComplete, onCancel }) {
             const [recording, setRecording] = useState(false);
             const [duration, setDuration] = useState(0);
@@ -211,7 +204,6 @@
             );
         }
 
-        // CONFIRM DIALOG
         function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }) {
             if (!isOpen) return null;
             return (
@@ -230,16 +222,13 @@
             );
         }
 
-        // ACTIVITY MODAL - Globálna história všetkých aktivít
         function ActivityModal({ onClose }) {
             const { supabaseClient, teamMembers } = useApp();
             const [activities, setActivities] = useState([]);
             const [loading, setLoading] = useState(true);
             const [filter, setFilter] = useState('all');
 
-            useEffect(() => {
-                loadActivities();
-            }, []);
+            useEffect(() => { loadActivities(); }, []);
 
             const loadActivities = async () => {
                 setLoading(true);
@@ -278,58 +267,33 @@
                 }
             };
 
-            const filteredActivities = filter === 'all' 
-                ? activities 
-                : activities.filter(a => a.user_id === filter);
+            const filteredActivities = filter === 'all' ? activities : activities.filter(a => a.user_id === filter);
 
             return (
                 <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={onClose}>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden animate-scaleIn" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-indigo-50 to-purple-50">
                             <div>
-                                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                                    <Icon name="Activity" className="w-6 h-6 text-indigo-600" />
-                                    Aktivita tímu
-                                </h2>
+                                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Icon name="Activity" className="w-6 h-6 text-indigo-600" />Aktivita tímu</h2>
                                 <p className="text-sm text-gray-500 mt-1">Posledných 100 akcií</p>
                             </div>
-                            <button onClick={onClose} className="p-2 hover:bg-white rounded-xl transition-colors">
-                                <Icon name="X" className="w-6 h-6 text-gray-500" />
-                            </button>
+                            <button onClick={onClose} className="p-2 hover:bg-white rounded-xl transition-colors"><Icon name="X" className="w-6 h-6 text-gray-500" /></button>
                         </div>
-
-                        {/* Filter by user */}
                         <div className="p-4 border-b bg-gray-50">
                             <div className="flex gap-2 overflow-x-auto hide-scrollbar">
-                                <button
-                                    onClick={() => setFilter('all')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${filter === 'all' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border'}`}
-                                >
-                                    Všetci
-                                </button>
+                                <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${filter === 'all' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border'}`}>Všetci</button>
                                 {teamMembers.map(m => (
-                                    <button
-                                        key={m.id}
-                                        onClick={() => setFilter(m.id)}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${filter === m.id ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border'}`}
-                                    >
-                                        <UserAvatar user={m} size="xs" />
-                                        {m.name?.split(' ')[0]}
+                                    <button key={m.id} onClick={() => setFilter(m.id)} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${filter === m.id ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border'}`}>
+                                        <UserAvatar user={m} size="xs" />{m.name?.split(' ')[0]}
                                     </button>
                                 ))}
                             </div>
                         </div>
-
                         <div className="overflow-y-auto max-h-[calc(85vh-180px)]">
                             {loading ? (
-                                <div className="flex items-center justify-center py-12">
-                                    <Icon name="Loader2" className="w-8 h-8 animate-spin text-gray-300" />
-                                </div>
+                                <div className="flex items-center justify-center py-12"><Icon name="Loader2" className="w-8 h-8 animate-spin text-gray-300" /></div>
                             ) : filteredActivities.length === 0 ? (
-                                <div className="text-center py-12">
-                                    <Icon name="Activity" className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-                                    <p className="text-gray-400">Žiadna aktivita</p>
-                                </div>
+                                <div className="text-center py-12"><Icon name="Activity" className="w-16 h-16 text-gray-200 mx-auto mb-4" /><p className="text-gray-400">Žiadna aktivita</p></div>
                             ) : (
                                 <div className="divide-y">
                                     {filteredActivities.map((activity, index) => {
@@ -337,28 +301,12 @@
                                         return (
                                             <div key={activity.id} className="p-4 hover:bg-gray-50 transition-colors animate-fadeIn" style={{ animationDelay: `${index * 0.02}s` }}>
                                                 <div className="flex gap-4">
-                                                    <div className="flex-shrink-0">
-                                                        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: actionStyle.bg }}>
-                                                            <Icon name={actionStyle.icon} className="w-5 h-5" style={{ color: actionStyle.color }} />
-                                                        </div>
-                                                    </div>
+                                                    <div className="flex-shrink-0"><div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: actionStyle.bg }}><Icon name={actionStyle.icon} className="w-5 h-5" style={{ color: actionStyle.color }} /></div></div>
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <UserAvatar user={activity.profiles} size="xs" />
-                                                            <span className="font-semibold text-gray-900">{activity.profiles?.name}</span>
-                                                            <span className="text-gray-500">{getActionLabel(activity.action)}</span>
-                                                        </div>
-                                                        {activity.tasks?.title && (
-                                                            <p className="text-sm font-medium text-gray-700 mt-1 truncate">
-                                                                „{activity.tasks.title}"
-                                                            </p>
-                                                        )}
-                                                        {activity.details && (
-                                                            <p className="text-sm text-gray-500 mt-1">{activity.details}</p>
-                                                        )}
-                                                        <p className="text-xs text-gray-400 mt-2">
-                                                            {formatRelativeTime(activity.created_at)}
-                                                        </p>
+                                                        <div className="flex items-center gap-2 flex-wrap"><UserAvatar user={activity.profiles} size="xs" /><span className="font-semibold text-gray-900">{activity.profiles?.name}</span><span className="text-gray-500">{getActionLabel(activity.action)}</span></div>
+                                                        {activity.tasks?.title && <p className="text-sm font-medium text-gray-700 mt-1 truncate">„{activity.tasks.title}"</p>}
+                                                        {activity.details && <p className="text-sm text-gray-500 mt-1">{activity.details}</p>}
+                                                        <p className="text-xs text-gray-400 mt-2">{formatRelativeTime(activity.created_at)}</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -372,7 +320,6 @@
             );
         }
 
-        // PROFILE SETUP MODAL
         function ProfileSetupModal({ user, onSave, onClose, isFirstTime }) {
             const [form, setForm] = useState({ name: user?.name || '', role: user?.role || 'Developer', color: user?.color || '#3b82f6', avatar_url: user?.avatar_url || '' });
             const [uploading, setUploading] = useState(false);
@@ -410,7 +357,6 @@
             );
         }
 
-        // AUTH SCREEN
         function AuthScreen() {
             const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('');
             const handleLogin = async (e) => { e.preventDefault(); setLoading(true); setError(''); const { error } = await supabaseClient.auth.signInWithPassword({ email, password }); if (error) setError(error.message); setLoading(false); };
@@ -430,7 +376,6 @@
             );
         }
 
-        // INVITE REGISTER SCREEN
         function InviteRegisterScreen({ token }) {
             const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
             const [loading, setLoading] = useState(true); const [registering, setRegistering] = useState(false); const [error, setError] = useState(''); const [tokenValid, setTokenValid] = useState(false);
@@ -469,7 +414,6 @@
             );
         }
 
-        // TEAM MODAL
         function TeamModal({ onClose }) {
             const { teamMembers, currentUser } = useApp();
             return (
@@ -484,7 +428,6 @@
             );
         }
 
-        // ADMIN PANEL
         function AdminPanelModal({ onClose }) {
             const { supabaseClient } = useApp();
             const [email, setEmail] = useState('');
@@ -527,12 +470,204 @@
             );
         }
 
-        // TASK DETAIL MODAL
+        // MEETING DETAIL MODAL - s editáciou, mazaním a komentármi
+        function MeetingDetailModal({ meeting, onClose, onUpdate, onDelete }) {
+            const { currentUser, supabaseClient } = useApp();
+            const [tab, setTab] = useState('detail');
+            const [editing, setEditing] = useState(false);
+            const [form, setForm] = useState({ 
+                title: meeting.title, 
+                date: meeting.date, 
+                video_url: meeting.video_url || '', 
+                description: meeting.description || '',
+                status: meeting.status || 'planned'
+            });
+            const [comments, setComments] = useState([]);
+            const [newComment, setNewComment] = useState('');
+            const [recordingAudio, setRecordingAudio] = useState(false);
+
+            useEffect(() => { loadComments(); }, [meeting.id]);
+            
+            const loadComments = async () => {
+                const { data } = await supabaseClient
+                    .from('meeting_comments')
+                    .select('*, profiles(*)')
+                    .eq('meeting_id', meeting.id)
+                    .order('created_at');
+                setComments(data || []);
+            };
+
+            const saveEdit = async () => {
+                await supabaseClient.from('meetings').update(form).eq('id', meeting.id);
+                onUpdate();
+                setEditing(false);
+            };
+
+            const addComment = async (type = 'text', content = newComment) => {
+                if (type === 'text' && !content.trim()) return;
+                await supabaseClient.from('meeting_comments').insert({
+                    meeting_id: meeting.id,
+                    author_id: currentUser?.id,
+                    text: type === 'text' ? content : null,
+                    audio_url: type === 'audio' ? content : null,
+                    comment_type: type
+                });
+                setNewComment('');
+                loadComments();
+            };
+
+            const statusConf = meetingStatusConfig[meeting.status || 'planned'];
+
+            return (
+                <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={onClose}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden animate-scaleIn" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
+                            <div className="flex items-start gap-4">
+                                <div className="w-14 h-14 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                    <Icon name="Calendar" className="w-7 h-7 text-blue-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    {editing ? (
+                                        <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-xl font-bold w-full px-3 py-2 border-2 border-gray-200 rounded-xl" />
+                                    ) : (
+                                        <h2 className="text-xl font-bold text-gray-900 mb-2">{meeting.title}</h2>
+                                    )}
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className="px-3 py-1 rounded-lg text-xs font-semibold" style={{ background: statusConf?.bg, color: statusConf?.color }}>
+                                            {statusConf?.label}
+                                        </span>
+                                        <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600">
+                                            <Icon name="Calendar" className="w-3 h-3 inline mr-1" />
+                                            {new Date(meeting.date).toLocaleDateString('sk', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    {!editing && <button onClick={() => setEditing(true)} className="p-2 rounded-xl hover:bg-white/50"><Icon name="Edit3" className="w-5 h-5 text-gray-500" /></button>}
+                                    <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/50"><Icon name="X" className="w-5 h-5 text-gray-500" /></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex border-b overflow-x-auto hide-scrollbar">
+                            {[
+                                { id: 'detail', label: 'Detail', icon: 'FileText' },
+                                { id: 'comments', label: `Komentáre (${comments.length})`, icon: 'MessageCircle' }
+                            ].map(t => (
+                                <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 ${tab === t.id ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>
+                                    <Icon name={t.icon} className="w-4 h-4" />{t.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-280px)]">
+                            {tab === 'detail' && (
+                                <div className="space-y-6">
+                                    {editing && (
+                                        <div>
+                                            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Stav</h3>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {Object.entries(meetingStatusConfig).map(([k, v]) => (
+                                                    <button key={k} onClick={() => setForm({ ...form, status: k })} className={`p-3 rounded-xl border-2 flex items-center justify-center gap-2 ${form.status === k ? 'border-current shadow-sm' : 'border-gray-200'}`} style={{ color: form.status === k ? v.color : '#666', background: form.status === k ? v.bg : 'white' }}>
+                                                        <span className="text-sm font-medium">{v.label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Dátum</h3>
+                                        {editing ? (
+                                            <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" />
+                                        ) : (
+                                            <p className="text-gray-700 bg-gray-50 rounded-xl p-4">{new Date(meeting.date).toLocaleDateString('sk', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Video URL</h3>
+                                        {editing ? (
+                                            <input type="url" value={form.video_url} onChange={e => setForm({ ...form, video_url: e.target.value })} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="https://..." />
+                                        ) : meeting.video_url ? (
+                                            <a href={meeting.video_url} target="_blank" className="flex items-center gap-2 text-blue-600 bg-blue-50 rounded-xl p-4 hover:bg-blue-100">
+                                                <Icon name="Play" className="w-5 h-5" />
+                                                <span className="font-medium">Otvoriť video</span>
+                                                <Icon name="ExternalLink" className="w-4 h-4 ml-auto" />
+                                            </a>
+                                        ) : (
+                                            <p className="text-gray-400 bg-gray-50 rounded-xl p-4">Bez video linku</p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Popis</h3>
+                                        {editing ? (
+                                            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl resize-none" placeholder="Popis meetingu..." />
+                                        ) : (
+                                            <p className="text-gray-700 bg-gray-50 rounded-xl p-4">{meeting.description || 'Bez popisu'}</p>
+                                        )}
+                                    </div>
+
+                                    {editing && (
+                                        <div className="flex gap-3">
+                                            <button onClick={() => setEditing(false)} className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 font-semibold btn-press">Zrušiť</button>
+                                            <button onClick={saveEdit} className="flex-1 px-4 py-3 rounded-xl text-white font-semibold btn-press" style={{ background: 'var(--success)' }}>Uložiť</button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {tab === 'comments' && (
+                                <div className="space-y-4">
+                                    {!recordingAudio && (
+                                        <div className="flex gap-2">
+                                            <input value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addComment('text')} placeholder="Napíšte komentár..." className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl" />
+                                            <button onClick={() => addComment('text')} className="px-4 py-3 rounded-xl text-white btn-press" style={{ background: 'var(--primary)' }}><Icon name="Send" className="w-5 h-5" /></button>
+                                            <button onClick={() => setRecordingAudio(true)} className="px-4 py-3 rounded-xl border-2 border-gray-200 btn-press"><Icon name="Mic" className="w-5 h-5 text-gray-600" /></button>
+                                        </div>
+                                    )}
+                                    {recordingAudio && <AudioRecorder onComplete={(url) => { addComment('audio', url); setRecordingAudio(false); }} onCancel={() => setRecordingAudio(false)} />}
+                                    <div className="space-y-3">
+                                        {comments.length === 0 ? (
+                                            <div className="text-center py-8">
+                                                <Icon name="MessageCircle" className="w-12 h-12 text-gray-200 mx-auto mb-2" />
+                                                <p className="text-gray-400">Zatiaľ žiadne komentáre</p>
+                                            </div>
+                                        ) : comments.map(c => (
+                                            <div key={c.id} className="bg-gray-50 rounded-xl p-4">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <UserAvatar user={c.profiles} size="sm" />
+                                                    <span className="font-semibold text-sm">{c.profiles?.name}</span>
+                                                    <span className="text-xs text-gray-400">{formatRelativeTime(c.created_at)}</span>
+                                                </div>
+                                                <div className="ml-10">
+                                                    {c.comment_type === 'text' && <p className="text-gray-700">{c.text}</p>}
+                                                    {c.comment_type === 'audio' && <audio controls className="w-full max-w-md"><source src={c.audio_url} type="audio/webm" /></audio>}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-between p-4 border-t bg-gray-50">
+                            <button onClick={() => onDelete(meeting.id)} className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl flex items-center gap-2 font-medium btn-press">
+                                <Icon name="Trash2" className="w-4 h-4" />Zmazať
+                            </button>
+                            <button onClick={onClose} className="px-6 py-2 rounded-xl text-white font-medium btn-press" style={{ background: 'var(--dark)' }}>Zavrieť</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         function TaskDetailModal({ task, meetings, onClose, onUpdate, onDelete }) {
             const { currentUser, teamMembers, supabaseClient, loadTasks, setConfirmDialog, isAdmin } = useApp();
             const [tab, setTab] = useState('detail');
             const [editing, setEditing] = useState(false);
-            const [form, setForm] = useState({ title: task.title, description: task.description || '', type: task.type, deadline: task.deadline || '', estimate: task.estimate || 4, status: task.status });
+            const [form, setForm] = useState({ title: task.title, description: task.description || '', type: task.type, deadline: task.deadline || '', estimate: task.estimate || 0, status: task.status, priority: task.priority });
             const [comments, setComments] = useState([]);
             const [screenshots, setScreenshots] = useState([]);
             const [history, setHistory] = useState([]);
@@ -550,8 +685,9 @@
                 const changes = [];
                 if (form.title !== task.title) changes.push('Názov zmenený');
                 if (form.status !== task.status) changes.push(`Stav: ${statusConfig[task.status].label} → ${statusConfig[form.status].label}`);
+                if (form.priority !== task.priority) changes.push(`Priorita: #${task.priority} → #${form.priority}`);
                 await supabaseClient.from('tasks').update(form).eq('id', task.id);
-                if (changes.length) await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: 'edited', details: changes.join(', ') });
+                if (changes.length) await supabaseClient.from('task_history').insert({ task_id: task.id, user_id: currentUser?.id, action: form.priority !== task.priority ? 'priority_change' : 'edited', details: changes.join(', ') });
                 setEditing(false); loadTasks(); loadHistory();
             };
 
@@ -591,7 +727,10 @@
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-scaleIn" onClick={e => e.stopPropagation()} onPaste={handlePaste}>
                         <div className="p-6 border-b bg-gradient-to-r from-gray-50 to-white">
                             <div className="flex items-start gap-4">
-                                <div className="w-14 h-14 rounded-xl flex items-center justify-center text-white font-bold text-xl flex-shrink-0" style={{ background: task.priority <= 3 ? 'var(--primary)' : task.priority <= 6 ? 'var(--warning)' : 'var(--success)' }}>#{task.priority}</div>
+                                {/* Priority badge - VŽDY ČERVENÉ */}
+                                <div className="w-14 h-14 rounded-xl flex items-center justify-center text-white font-bold text-xl flex-shrink-0 priority-badge">
+                                    #{task.priority}
+                                </div>
                                 <div className="flex-1 min-w-0">
                                     {editing ? <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-xl font-bold w-full px-3 py-2 border-2 border-gray-200 rounded-xl" /> : <h2 className="text-xl font-bold text-gray-900 mb-2">{task.title}</h2>}
                                     <div className="flex flex-wrap gap-2">
@@ -613,12 +752,21 @@
                         <div className="p-6 overflow-y-auto max-h-[calc(90vh-280px)]">
                             {tab === 'detail' && (
                                 <div className="space-y-6">
+                                    {/* Priorita - editovateľná ručne */}
+                                    {editing && (
+                                        <div>
+                                            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Priorita / Poradie</h3>
+                                            <input type="number" min="1" value={form.priority} onChange={e => setForm({ ...form, priority: parseInt(e.target.value) || 1 })} className="w-32 px-4 py-3 border-2 border-gray-200 rounded-xl text-lg font-bold text-center" style={{ color: 'var(--primary)' }} />
+                                            <p className="text-xs text-gray-400 mt-1">Nižšie číslo = vyššia priorita</p>
+                                        </div>
+                                    )}
+                                    
                                     <div><h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Popis</h3>{editing ? <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl resize-none" /> : <p className="text-gray-700 bg-gray-50 rounded-xl p-4">{task.description || 'Bez popisu'}</p>}</div>
                                     {task.audio_url && <div><h3 className="text-sm font-semibold text-gray-500 uppercase mb-2 flex items-center gap-2"><Icon name="AudioLines" className="w-4 h-4 text-purple-500" />Audio popis</h3><audio controls className="w-full"><source src={task.audio_url} type="audio/webm" /></audio></div>}
                                     {editing && <div><h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Stav</h3><div className="grid grid-cols-2 sm:grid-cols-4 gap-2">{Object.entries(statusConfig).map(([k, v]) => <button key={k} onClick={() => setForm({ ...form, status: k })} className={`p-3 rounded-xl border-2 flex items-center justify-center gap-2 ${form.status === k ? 'border-current shadow-sm' : 'border-gray-200'}`} style={{ color: form.status === k ? v.color : '#666', background: form.status === k ? v.bg : 'white' }}><Icon name={v.icon} className="w-4 h-4" /><span className="text-sm font-medium">{v.label}</span></button>)}</div></div>}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-gray-50 rounded-xl p-4"><p className="text-xs font-semibold text-gray-500 uppercase mb-1">Deadline</p>{editing ? <input type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" /> : <p className="font-semibold text-gray-900">{task.deadline ? new Date(task.deadline).toLocaleDateString('sk') : '-'}</p>}</div>
-                                        <div className="bg-gray-50 rounded-xl p-4"><p className="text-xs font-semibold text-gray-500 uppercase mb-1">Odhad</p>{editing ? <input type="number" value={form.estimate} onChange={e => setForm({ ...form, estimate: +e.target.value })} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" /> : <p className="font-semibold text-gray-900">{task.estimate}h</p>}</div>
+                                        <div className="bg-gray-50 rounded-xl p-4"><p className="text-xs font-semibold text-gray-500 uppercase mb-1">Odhad</p>{editing ? <input type="number" value={form.estimate} onChange={e => setForm({ ...form, estimate: +e.target.value })} className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm" /> : <p className="font-semibold text-gray-900">{task.estimate || 0}h</p>}</div>
                                     </div>
                                     {editing && <div className="flex gap-3"><button onClick={() => setEditing(false)} className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 font-semibold btn-press">Zrušiť</button><button onClick={saveEdit} className="flex-1 px-4 py-3 rounded-xl text-white font-semibold btn-press" style={{ background: 'var(--success)' }}>Uložiť</button></div>}
                                     <div>
@@ -658,10 +806,9 @@
             );
         }
 
-        // NEW TASK MODAL
         function NewTaskModal({ meetings, selectedMeeting, onClose, onSave }) {
             const { teamMembers } = useApp();
-            const [form, setForm] = useState({ meeting_id: selectedMeeting !== 'all' ? selectedMeeting : null, type: 'feature', title: '', description: '', deadline: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], estimate: 4, assignees: [], audio_url: null });
+            const [form, setForm] = useState({ meeting_id: selectedMeeting !== 'all' ? selectedMeeting : null, type: 'feature', title: '', description: '', deadline: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], estimate: 0, assignees: [], audio_url: null });
             const [recordingAudio, setRecordingAudio] = useState(false);
             return (
                 <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={onClose}>
@@ -684,9 +831,8 @@
             );
         }
 
-        // NEW MEETING MODAL
         function NewMeetingModal({ onClose, onSave }) {
-            const [form, setForm] = useState({ title: '', date: new Date().toISOString().split('T')[0], video_url: '', description: '' });
+            const [form, setForm] = useState({ title: '', date: new Date().toISOString().split('T')[0], video_url: '', description: '', status: 'planned' });
             return (
                 <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={onClose}>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-scaleIn" onClick={e => e.stopPropagation()}>
@@ -703,15 +849,15 @@
             );
         }
 
-        // MOBILE TASK CARD
         function MobileTaskCard({ task, onClick }) {
-            const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== 'done';
             const typeConf = typeConfig[task.type];
             const statusConf = statusConfig[task.status];
+            const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== 'done';
             return (
                 <div className="task-card" onClick={onClick}>
                     <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ background: task.priority <= 3 ? 'var(--primary)' : task.priority <= 6 ? 'var(--warning)' : 'var(--success)' }}>{task.priority}</div>
+                        {/* Priority badge - VŽDY ČERVENÉ */}
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 priority-badge">{task.priority}</div>
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ background: typeConf?.bg, color: typeConf?.color }}>{typeConf?.label}</span>
@@ -730,7 +876,6 @@
             );
         }
 
-        // MAIN APP
         function App() {
             const [session, setSession] = useState(null);
             const [currentUser, setCurrentUser] = useState(null);
@@ -750,6 +895,7 @@
             const [statusFilter, setStatusFilter] = useState('all');
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedTask, setSelectedTask] = useState(null);
+            const [selectedMeetingDetail, setSelectedMeetingDetail] = useState(null);
             const [showNewTask, setShowNewTask] = useState(false);
             const [showNewMeeting, setShowNewMeeting] = useState(false);
             const [showTeam, setShowTeam] = useState(false);
@@ -759,7 +905,7 @@
             const [draggedTask, setDraggedTask] = useState(null);
 
             const isAdmin = currentUser?.role === 'Admin';
-            const isModalOpen = selectedTask || showNewTask || showNewMeeting || showTeam || showProfileSetup || showAdminPanel || showActivity;
+            const isModalOpen = selectedTask || selectedMeetingDetail || showNewTask || showNewMeeting || showTeam || showProfileSetup || showAdminPanel || showActivity;
 
             useEffect(() => {
                 supabaseClient.auth.getSession().then(({ data: { session } }) => {
@@ -841,7 +987,13 @@
                 loadMeetings(); setShowNewMeeting(false);
             };
 
-            // Drag & drop pre priority (admin only)
+            const deleteMeeting = (id) => {
+                setConfirmDialog({ isOpen: true, title: 'Zmazať meeting?', message: 'Táto akcia je nevratná.',
+                    onConfirm: async () => { await supabaseClient.from('meetings').delete().eq('id', id); setSelectedMeetingDetail(null); loadMeetings(); setConfirmDialog({ isOpen: false }); },
+                    onCancel: () => setConfirmDialog({ isOpen: false })
+                });
+            };
+
             const handleDragStart = (e, task) => { setDraggedTask(task); e.dataTransfer.effectAllowed = 'move'; };
             const handleDrop = async (e, targetTask) => {
                 e.preventDefault();
@@ -870,10 +1022,11 @@
                 done: filteredTasks.filter(t => t.status === 'done').length
             };
 
+            const currentMeeting = selectedMeeting !== 'all' ? meetings.find(m => m.id === selectedMeeting) : null;
+
             return (
                 <AppContext.Provider value={{ currentUser, teamMembers, supabaseClient, loadTasks, setConfirmDialog, updateTask, isAdmin }}>
                     <div className="min-h-screen">
-                        {/* Header */}
                         <header className="glass sticky top-0 z-40 border-b border-gray-200/50">
                             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
@@ -881,7 +1034,6 @@
                                     <div className="hidden sm:block"><h1 className="font-bold text-gray-900">PEMApp Tasks</h1><p className="text-xs text-gray-500">Správa úloh</p></div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {/* ACTIVITY BUTTON */}
                                     <button onClick={() => setShowActivity(true)} className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors" title="Aktivita tímu">
                                         <Icon name="Activity" className="w-5 h-5 text-indigo-600" />
                                         <span className="hidden sm:inline text-sm font-medium text-gray-700">Aktivita</span>
@@ -898,15 +1050,21 @@
                         </header>
 
                         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-                            {/* Controls */}
                             <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
                                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                                     <div className="flex-1 max-w-md">
                                         <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Meeting</label>
-                                        <select value={selectedMeeting} onChange={e => setSelectedMeeting(e.target.value)} className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl font-medium">
-                                            <option value="all">Všetky meetingy</option>
-                                            {meetings.map(m => <option key={m.id} value={m.id}>{m.title} ({m.date})</option>)}
-                                        </select>
+                                        <div className="flex gap-2">
+                                            <select value={selectedMeeting} onChange={e => setSelectedMeeting(e.target.value)} className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl font-medium">
+                                                <option value="all">Všetky meetingy</option>
+                                                {meetings.map(m => <option key={m.id} value={m.id}>{m.title} ({m.date})</option>)}
+                                            </select>
+                                            {currentMeeting && (
+                                                <button onClick={() => setSelectedMeetingDetail(currentMeeting)} className="px-3 py-2.5 border-2 border-blue-200 bg-blue-50 rounded-xl text-blue-600 hover:bg-blue-100" title="Detail meetingu">
+                                                    <Icon name="Info" className="w-5 h-5" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={() => setShowNewMeeting(true)} className="px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 hover:border-gray-400 font-medium btn-press"><Icon name="Plus" className="w-4 h-4 inline mr-1" />Meeting</button>
@@ -915,7 +1073,6 @@
                                 </div>
                             </div>
 
-                            {/* Filters */}
                             <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                                     <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto hide-scrollbar">
@@ -937,9 +1094,6 @@
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Admin hint */}
-                            {isAdmin && <div className="hidden lg:flex items-center gap-2 px-4 py-2 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700"><Icon name="GripVertical" className="w-4 h-4" /><span>Ťahajte riadky pre zmenu priority</span></div>}
 
                             {/* DESKTOP: Table View */}
                             <div className="hidden lg:block bg-white rounded-xl shadow-sm border overflow-hidden mb-6">
@@ -973,7 +1127,8 @@
                                                     onDrop={(e) => { e.currentTarget.classList.remove('drag-over'); isAdmin && handleDrop(e, task); }}
                                                 >
                                                     <td>
-                                                        <span className={`w-8 h-8 rounded-lg text-xs font-bold text-white flex items-center justify-center ${isAdmin ? 'cursor-grab' : ''}`} style={{ background: task.priority <= 3 ? 'var(--primary)' : task.priority <= 6 ? 'var(--warning)' : 'var(--success)' }}>{task.priority}</span>
+                                                        {/* Priority badge - VŽDY ČERVENÉ */}
+                                                        <span className={`w-8 h-8 rounded-lg text-xs font-bold text-white flex items-center justify-center priority-badge ${isAdmin ? 'cursor-grab' : ''}`}>{task.priority}</span>
                                                     </td>
                                                     <td>
                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ background: typeConf?.bg, color: typeConf?.color }}>
@@ -1030,7 +1185,6 @@
                                 ))}
                             </div>
 
-                            {/* Stats */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                 {[
                                     { label: 'Celkom', value: stats.total, color: '#0f172a', bg: '#f1f5f9' },
@@ -1046,9 +1200,9 @@
                             </div>
                         </main>
 
-                        {/* Modals */}
                         {showProfileSetup && <ProfileSetupModal user={currentUser} onSave={saveProfile} onClose={() => !isFirstTime && setShowProfileSetup(false)} isFirstTime={isFirstTime} />}
                         {selectedTask && <TaskDetailModal task={selectedTask} meetings={meetings} onClose={() => setSelectedTask(null)} onUpdate={updateTask} onDelete={deleteTask} />}
+                        {selectedMeetingDetail && <MeetingDetailModal meeting={selectedMeetingDetail} onClose={() => setSelectedMeetingDetail(null)} onUpdate={loadMeetings} onDelete={deleteMeeting} />}
                         {showNewTask && <NewTaskModal meetings={meetings} selectedMeeting={selectedMeeting} onClose={() => setShowNewTask(false)} onSave={createTask} />}
                         {showNewMeeting && <NewMeetingModal onClose={() => setShowNewMeeting(false)} onSave={createMeeting} />}
                         {showTeam && <TeamModal onClose={() => setShowTeam(false)} />}
